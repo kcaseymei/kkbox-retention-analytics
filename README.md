@@ -27,7 +27,7 @@ The first stage, a **full-data audit of both data releases (about 444 million ro
 | Stage | Work | Status |
 |---|---|---|
 | A. Audit and definitions | Audit of all source files, issue register, churn definition, label rebuild, monthly cohorts, cutoffs and feature windows | **Audit, label check and monthly cohorts complete**; prediction setup designed ([cutoffs, windows, splits](docs/prediction_design.md)) |
-| B. Relational analytics | PostgreSQL, metric definitions, cohort retention and renewal SQL | Planned |
+| B. Relational analytics | PostgreSQL, metric definitions, cohort retention and renewal SQL | **Database built and reconciled with the audit** (staging and analytics schemas, [data model](docs/data_model.md)); SQL analyses next |
 | C. Behavioral features | `user_logs` to user-by-cutoff features (Databricks / PySpark) | Planned |
 | D. Serving and BI | Snowflake marts and a Power BI dashboard | Planned |
 | E. Prediction | Baseline plus one stronger model with time-aware validation, top-k evaluation | Planned |
@@ -80,12 +80,13 @@ python -m unittest tests.test_audit_checks tests.test_audit_display tests.test_c
 |---|---|
 | `notebooks/01_data_audit.ipynb` | The full-data audit, with a release map, findings by table, and decisions |
 | `notebooks/02_population_and_churn.ipynb` | Label rebuild against the official labels, population differences, monthly cohorts and their swings |
+| `sql/postgres/`, `sql/quality/` | PostgreSQL schemas, staging load, typed analytics tables (`run_all.sh`), and a reconciliation script against the audit figures |
 | `src/audit_checks.py` | Reusable DuckDB checks: row counts, missingness, key uniqueness, ranges, date validity, coverage |
 | `src/churn_labels.py` | The official labeller rules rebuilt in DuckDB (population and 30-day renewal label), tested on the official examples |
 | `src/audit_display.py`, `src/csv_to_parquet.py` | Readable notebook output; verified CSV-to-Parquet conversion |
 | `tests/` | Unit tests for the checks and the display helper |
 | `reports/` | Audit report, the data-quality issue register, and the figures used above |
-| `docs/` | Data dictionary, churn definition, prediction setup (cutoffs, feature windows, splits), notes on the official dataset description |
+| `docs/` | Data model (PostgreSQL schemas and key links), data dictionary, churn definition, prediction setup (cutoffs, feature windows, splits), notes on the official dataset description |
 | `KKBOX_MASTER_PLAN.md` | Scope, roadmap, decisions, and a dated log of every milestone |
 
 ## Churn definition
