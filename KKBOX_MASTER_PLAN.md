@@ -22,9 +22,9 @@ Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
 
 Public README uses five layers: Python/pandas/Parquet, PostgreSQL, Databricks/PySpark, Snowflake, Power BI/Tableau. Fabric is an optional extension. Details: Section 3 (simplified roadmap) and the 2026-10-02 decision log entries.
 
-**Current state:** the Phase 1 data audit on the complete dataset (v1 + v2) is done and committed on branch `phase1-data-audit` (not yet merged into `main`, not pushed). The notebook `notebooks/01_data_audit.ipynb` ran from top to bottom (31 of 31 code cells, no errors); the companion documents (`reports/data_audit.md`, `reports/data_quality_issues.md` with DQ-001 to DQ-019, `docs/data_dictionary.md`) and the reusable checks (`src/audit_checks.py`, `src/audit_display.py`) are in the repository. No data-quality treatment has been applied.
+**Current state:** the Phase 1 data audit on the complete dataset (v1 + v2) is done and committed on branch `phase1-data-audit` (pushed to GitHub, not yet merged into `main`). The notebook `notebooks/01_data_audit.ipynb` ran from top to bottom (31 of 31 code cells, no errors); the companion documents (`reports/data_audit.md`, `reports/data_quality_issues.md` with DQ-001 to DQ-019, `docs/data_dictionary.md`) and the reusable checks (`src/audit_checks.py`, `src/audit_display.py`) are in the repository. No data-quality treatment has been applied.
 
-**Next action:** decide whether to push `phase1-data-audit` and merge it into `main`; then continue Stage A with the definitions: verify the label windows (February and March 2017) from transactions using the official labeller logic, define cutoffs and feature windows, and settle the `total_secs` treatment and the rule for shared transaction keys. Open check: whether users without logs are the users without member profiles.
+**Next action:** turn the exploratory label reconstruction into a tested, reusable implementation (`src/churn_labels.py`, with the official worked examples from `docs/churn_definition.md` as unit tests) and a new notebook `notebooks/02_population_and_churn.ipynb` that documents the cutoffs, the population rule, and the agreement with the official labels; then settle the `total_secs` treatment and the rule for shared transaction keys. Decide whether to merge `phase1-data-audit` into `main` (pull request) after the README is reviewed. Open check: whether users without logs are the users without member profiles.
 
 ## 1. Purpose and continuity
 
@@ -617,4 +617,28 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Decisions and rationale: Work stays on a branch until the user decides on merging; nothing was pushed to GitHub.
 - Blockers / dependencies: None.
 - Next action: see "At a glance".
-- Commit or pull request: Branch `phase1-data-audit` with three local commits (not pushed). This plan update is uncommitted and goes into the next commit.
+- Commit or pull request: Branch `phase1-data-audit` with three commits, pushed to GitHub on 2026-10-05 (no pull request opened, `main` unchanged). This plan update is uncommitted and goes into the next commit.
+
+### 2026-10-05 (update 10) — Label windows and cutoffs checked against transactions (exploratory)
+
+- Date: 2026-10-05
+- Phase and status: Stage A definitions in progress (label-window verification started); README drafted (uncommitted).
+- Changes / artifacts: Drafted a new `README.md` (status table, audit findings, data and reproduction steps, repository map, limits; numbers checked: about 444 million rows audited, about 34 GB of raw data). Translated the official `WSDMChurnLabeller.scala` into read-only DuckDB queries (scratch scripts, not in the repository) to rebuild labels from `tx_v1` plus `tx_v2` and compare them with `train.csv` and `train_v2.csv`. Key reading of the labeller: the rule needs transactions after the cutoff, so the February window can only be labeled with the March rows in `transactions_v2`; `transactions.csv` alone ends on 2017-02-28.
+- Validation performed and results (full data, exploratory, not yet in a notebook): (1) Labeller rule (last expiration inside the target month), cutoff at the end of the previous month, full history from 2015: February window rebuilds 879,537 users, 879,478 of them in `train.csv` (88.57% of its 992,931 users; 59 extra) with 98.36% label agreement; March window rebuilds 886,500 users, 862,158 in `train_v2.csv` (88.79% of 970,960; 24,342 extra) with 95.73% agreement. (2) Cutoff scan: coverage of the official users grows as the cutoff moves toward the end of the previous month (February window: 13.5% at 2017-01-01, 79.1% at 2017-01-25, 88.57% at 2017-01-31, 86.69% at 2017-02-01; March window: 12.58% at 2017-02-01, 78.72% at 2017-02-25, 88.79% at 2017-02-28, 88.67% at 2017-03-01); the March extras fall from 24,342 to 7,066 at a 2017-03-01 cutoff while agreement drops to 94.84%. (3) Population rule: where the labeller rule leaves about 11% of the official users unplaced (for example 92,868 `train.csv` users whose last expiration lies after February, churn label rate 6.87%, 18,490 whose last expiration lies before it), the looser rule "any transaction up to the cutoff expires in the target month" covers 99.06% of `train.csv` users (597 extra) and 98.68% of `train_v2.csv` users (33,413 extra). (4) Labels follow the rule on the rebuilt users with 95.7–98.4% agreement, not exactly.
+- Findings versus hypotheses: Strongly supported (exploratory): `train.csv` is the February 2017 expiration window and `train_v2.csv` the March window, with the prediction cutoff at the end of the previous month. Hypothesis: the official training sample selects users with any expiration inside the target month, not only the last expiration as in the demonstration script; the treatment of early renewers and the 24,342 March extras is unexplained. Not an exact reproduction of the official labels.
+- Decisions and rationale: Implement the labeller as tested reusable code and document the cutoff and population choices in a new notebook before using any label-derived analysis; treat the loose population rule as the working hypothesis until the unexplained groups are examined.
+- Blockers / dependencies: None.
+- Next action: see "At a glance".
+- Commit or pull request: None (README and plan changes uncommitted; the audit branch is pushed, not merged).
+
+### 2026-10-06 (update 11) — Cross-month analysis agreed; right-censoring of reconstructed labels
+
+- Date: 2026-10-06
+- Phase and status: Stage A definitions / start of Stage B; the goal for the next days is a presentable public repository first, refinements afterwards.
+- Changes / artifacts: None in the repository. Exploratory read-only check of where rebuilt labels disagree with the official ones.
+- Validation performed and results (full data, exploratory): Among users present in both the rebuilt and the official label sets, the share of users rebuilt as churn but labeled renewal by the official file rises with the expiration day in the March window (0.13% for days 1–7, 0.42% for days 8–15, 0.86% for days 16–23, 2.22% from day 24) but stays at 0.01–0.03% in the February window. Transactions end on 2017-03-31, so a March expiration late in the month can renew in April without the renewal being observable.
+- Findings versus hypotheses: Consistent with right-censoring (inference, not proof): labels rebuilt from the supplied transactions are reliable only when the 30-day outcome window ends inside the data, i.e. for target months up to February 2017; the March 2017 cohort must use the official `train_v2` labels.
+- Decisions and rationale: The user wants cross-month (cohort) analysis to show breadth. Plan: implement the labeller as tested reusable code, rebuild monthly cohorts after a burn-in period (history starts 2015-01-01 and plans last up to 450 days) up to February 2017, add March 2017 from the official labels, and use the cohorts for churn-over-time, cohort retention, and rolling time-ordered validation. Sequence: first publish the repository (README, merge to `main`), then build the cross-month work.
+- Blockers / dependencies: None.
+- Next action: see "At a glance".
+- Commit or pull request: None.
