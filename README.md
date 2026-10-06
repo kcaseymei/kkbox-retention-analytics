@@ -26,7 +26,7 @@ The first stage, a **full-data audit of both data releases (about 444 million ro
 
 | Stage | Work | Status |
 |---|---|---|
-| A. Audit and definitions | Audit of all source files, issue register, churn definition, label rebuild, monthly cohorts, cutoffs and feature windows | **Audit and label check complete; monthly cohorts built**; feature windows next |
+| A. Audit and definitions | Audit of all source files, issue register, churn definition, label rebuild, monthly cohorts, cutoffs and feature windows | **Audit, label check and monthly cohorts complete**; prediction setup designed ([cutoffs, windows, splits](docs/prediction_design.md)) |
 | B. Relational analytics | PostgreSQL, metric definitions, cohort retention and renewal SQL | Planned |
 | C. Behavioral features | `user_logs` to user-by-cutoff features (Databricks / PySpark) | Planned |
 | D. Serving and BI | Snowflake marts and a Power BI dashboard | Planned |
@@ -85,7 +85,7 @@ python -m unittest tests.test_audit_checks tests.test_audit_display tests.test_c
 | `src/audit_display.py`, `src/csv_to_parquet.py` | Readable notebook output; verified CSV-to-Parquet conversion |
 | `tests/` | Unit tests for the checks and the display helper |
 | `reports/` | Audit report, the data-quality issue register, and the figures used above |
-| `docs/` | Data dictionary, churn definition, notes on the official dataset description |
+| `docs/` | Data dictionary, churn definition, prediction setup (cutoffs, feature windows, splits), notes on the official dataset description |
 | `KKBOX_MASTER_PLAN.md` | Scope, roadmap, decisions, and a dated log of every milestone |
 
 ## Churn definition
