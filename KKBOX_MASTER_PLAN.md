@@ -22,9 +22,9 @@ Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
 
 Public README uses five layers: Python/pandas/Parquet, PostgreSQL, Databricks/PySpark, Snowflake, Power BI/Tableau. Fabric is an optional extension. Details: Section 3 (simplified roadmap) and the 2026-10-02 decision log entries.
 
-**Current state:** the Phase 1 data audit on the complete dataset (v1 + v2) is done and committed on branch `phase1-data-audit` (pushed to GitHub, not yet merged into `main`). The notebook `notebooks/01_data_audit.ipynb` ran from top to bottom (31 of 31 code cells, no errors); the companion documents (`reports/data_audit.md`, `reports/data_quality_issues.md` with DQ-001 to DQ-019, `docs/data_dictionary.md`) and the reusable checks (`src/audit_checks.py`, `src/audit_display.py`) are in the repository. No data-quality treatment has been applied.
+**Current state:** Phase 1 (data audit) is complete and published on `main` (README, `notebooks/01_data_audit.ipynb`, reports, register DQ-001 to DQ-019, reusable checks, tests). The label rebuild (`src/churn_labels.py`, `notebooks/02_population_and_churn.ipynb`) reproduces the official February and March 2017 labels for 98.4% and 95.7% of shared users and builds 25 monthly cohorts; it is published with a chart in the README. Open: how early renewers are labeled, why the official sample includes users outside the last-expiration rule, the cause of the batch cohorts, and the `total_secs` treatment.
 
-**Next action:** turn the exploratory label reconstruction into a tested, reusable implementation (`src/churn_labels.py`, with the official worked examples from `docs/churn_definition.md` as unit tests) and a new notebook `notebooks/02_population_and_churn.ipynb` that documents the cutoffs, the population rule, and the agreement with the official labels; then settle the `total_secs` treatment and the rule for shared transaction keys. Decide whether to merge `phase1-data-audit` into `main` (pull request) after the README is reviewed. Open check: whether users without logs are the users without member profiles.
+**Next action:** define cutoffs and feature windows for the prediction stage, then build the relational layer (stage B: PostgreSQL schema, metric definitions, cohort retention SQL) and the behavioral features (stage C), updating the README status table after each block. Later: decide whether to hide or trim this plan on the public repository (reminder). Open check: whether users without logs are the users without member profiles.
 
 ## 1. Purpose and continuity
 
@@ -642,3 +642,39 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Blockers / dependencies: None.
 - Next action: see "At a glance".
 - Commit or pull request: None.
+
+### 2026-10-06 (update 12) — Label rebuild implemented and monthly cohorts computed (exploratory)
+
+- Date: 2026-10-06
+- Phase and status: Stage A definitions / start of the cross-month analysis (code written, notebook not yet written).
+- Changes / artifacts: Added `src/churn_labels.py` (`month_window`, `rebuild_labels`, `rebuild_months`: the official labeller rules in DuckDB, cutoff at the end of the previous month) and `tests/test_churn_labels.py` (the three official examples from `docs/churn_definition.md`, the 29/30-day boundary, cancellations that move the expiration earlier, same-day ordering, no later transaction, history start, month windows). Removed `PROJECT_PLAN.md` from the repository earlier the same day. Code and tests are uncommitted.
+- Validation performed and results: 29 unit tests pass (existing and new). On the full data the module reproduces the earlier exploratory results exactly: the February 2017 window rebuilds 879,537 users (879,478 in `train.csv`, 98.36% label agreement) and the March 2017 window 886,500 users (862,158 in `train_v2.csv`, 95.73%). Monthly cohorts for 2015-02 to 2017-03 were rebuilt (26 months, 17,869,628 user-month rows, 169 seconds). Cohort size grows from about 393 thousand users (2015-02) to about 880 thousand (2017-02); the churn label rate varies from 3.7% to 19.2%. Rebuilt rates are lower than the official ones because the rebuilt population is smaller (February 2017: 3.95% against 6.39%; March 2017: 4.93% against 8.99%), so the two must not be compared directly.
+- Findings versus hypotheses: Verified (exploratory): two spike months are driven by batches of users who share an expiration day. In 2015-04, 92,575 users expire on April 30 with a 79.8% churn rate, and 15.3% of that month's candidates have a list price of zero (0.0% in March 2015). In 2016-03 several expiration days (25, 29, 30, 1, 28) show 35–50% churn. Hypothesis (not verified): promotion or free-trial style cohorts that churn at high rates; the cause is unknown.
+- Decisions and rationale: Use target months 2015-07 to 2017-02 (20 months, rebuilt) plus 2017-03 (official `train_v2` labels) as the analysis cohorts; the earlier months stay in charts as a shaded burn-in period (history starts 2015-01-01 and long plans are invisible until renewed). The choice of 2015-07 is a judgment call. Report cohort mix (plan type, zero-price plans) next to churn over time.
+- Blockers / dependencies: None.
+- Next action: write the cohort notebook (`02_...`): monthly cohorts, churn over time, the spike investigation, comparison with the official labels, retention view; then update the README.
+- Commit or pull request: None.
+
+### 2026-10-06 (update 12b) — Why the rebuilt population and churn rate differ from the official labels (exploratory)
+
+- Date: 2026-10-06
+- Phase and status: Stage A definitions.
+- Changes / artifacts: None in the repository (read-only diagnostics).
+- Validation performed and results (full data, exploratory): (1) Population: the 113,453 `train.csv` users not rebuilt are 2,095 with transactions only after the cutoff, 18,490 whose last expiration lies before February (41.47% churn labels) and 92,868 whose last expiration lies after February (6.87%); together their churn label rate is 12.96% against 5.54% for the 879,478 rebuilt users in `train.csv`. For `train_v2.csv` the 108,802 users not rebuilt (2,524 / 20,813 / 85,465) have a 22.71% churn label rate against 7.26% for the 862,158 rebuilt users. The looser population rule "any transaction up to the cutoff expires in the target month" covers 99.06% (February) and 98.68% (March) of the official users. (2) Labels inside the shared users: the official file marks more users as churn than the rebuild: 14,193 in February (the rebuild says renewed) and 28,373 in March, against 199 and 8,438 in the other direction. About 70% of the February group (9,871 of 14,193) are users whose first later non-cancellation transaction was dated before their expiration (negative gap, early renewal); among all early renewers 11.00% (February) and 14.17% (March) are churn in the official file, against 0.2–2% for renewals within 0 to 29 days after expiration. Renewals with a zero payment explain only a small part (4.5% and 5.6% of those groups against 0.2% and 0.1% in the agreeing group). (3) The rebuilt churn rate of the shared users is 3.95% (February) and 4.93% (March) while the official labels of the same users give 5.54% and 7.26%.
+- Findings versus hypotheses: Verified (exploratory): the numbers above. Hypotheses (unverified): the official selection includes users with any expiration in the month, not only the last one; for early renewers the official label may be measured against a later expiration, so some early renewers who then lapse are labeled churn. Neither is in the demonstration script.
+- Decisions and rationale: Rebuilt rates and official rates describe different populations and label treatments and must not be compared directly. Rebuilt cohorts are used for trends across months and are described as "rebuilt with the demonstration rule"; the official labels remain the reference for the February and March 2017 windows. The early-renewer treatment is an open question to resolve before the modeling stage.
+- Blockers / dependencies: None.
+- Next action: see "At a glance".
+- Commit or pull request: None.
+
+### 2026-10-06 (update 13) — Cross-month cohort analysis published
+
+- Date: 2026-10-06
+- Phase and status: Stage A: audit, label check, and monthly cohorts complete; feature windows and cutoffs next.
+- Changes / artifacts: `src/churn_labels.py` (label rebuild, last expirations, looser population rule), `tests/test_churn_labels.py` (31 tests together with the existing ones pass), `notebooks/02_population_and_churn.ipynb` (executed from a fresh kernel by the user, 6 of 6 code cells, no errors), `reports/figures/churn_rate_by_month.png` and `reports/figures/spike_months_by_expiration_day.png` (exported from the notebook outputs), `requirements.txt` (matplotlib, pyarrow), README sections "Churn over time" and updated status, repository map, and reproduction steps.
+- Validation performed and results: Notebook outputs reproduce the exploratory figures (February 2017: 879,537 users rebuilt, 88.57% of the official users covered, 98.36% agreement; March 2017: 886,500, 88.79%, 95.73%; looser rule 99.06% and 98.68%; monthly cohorts 393 thousand to 880 thousand users with a churn label rate of 3.7% to 19.2%). One finding-table sentence quoted figures that were not visible in the outputs and was replaced by figures taken from the shown tables. Machine paths and user identifiers are absent from the notebook.
+- Findings versus hypotheses: See update 12 and 12b; the campaign or trial reading of the batch cohorts and the early-renewer labeling remain hypotheses.
+- Decisions and rationale: Publish the analysis with its limits stated in the README (rebuilt and official rates are different populations; labels rebuilt only up to February 2017).
+- Blockers / dependencies: None.
+- Next action: see "At a glance".
+- Commit or pull request: Two commits on `main` (label module and tests; notebook, figures, README, plan), pushed.
