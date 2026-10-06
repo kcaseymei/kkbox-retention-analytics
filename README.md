@@ -26,7 +26,7 @@ The first stage, a **full-data audit of both data releases (about 444 million ro
 
 | Stage | Work | Status |
 |---|---|---|
-| A. Audit and definitions | Audit of all source files, issue register, churn definition, cutoffs and feature windows | **Audit complete**; label-window verification and cutoffs in progress |
+| A. Audit and definitions | Audit of all source files, issue register, churn definition, label rebuild, monthly cohorts, cutoffs and feature windows | **Audit and label check complete; monthly cohorts built**; feature windows next |
 | B. Relational analytics | PostgreSQL, metric definitions, cohort retention and renewal SQL | Planned |
 | C. Behavioral features | `user_logs` to user-by-cutoff features (Databricks / PySpark) | Planned |
 | D. Serving and BI | Snowflake marts and a Power BI dashboard | Planned |
@@ -47,6 +47,16 @@ All figures are full-data results (every row), reproduced in [the audit notebook
 
 Nineteen data-quality items are tracked in the [issue register](reports/data_quality_issues.md) with evidence, risk, and a planned treatment. **No treatment has been applied yet**; source data is never modified.
 
+## Churn over time
+
+Applying the official labeller rules month by month rebuilds 25 monthly cohorts (expirations from February 2015 to February 2017). For the two supplied windows the rebuild reproduces the official labels for 98.4% (February 2017) and 95.7% (March 2017) of the users present in both, which also confirms the expiration month each label file covers. Details: [population and churn notebook](notebooks/02_population_and_churn.ipynb).
+
+![Churn label rate by expiration month](reports/figures/churn_rate_by_month.png)
+
+- **Churn is not flat.** The rebuilt churn label rate swings between 3.7% and 19.2%, mostly because of batches of users who share one expiration day: 92,575 users expired on 30 April 2015 and 79.8% of them were labeled churn, in a cohort with far more zero-price plans (15.3% against 0.0% a month earlier). This looks like a campaign or trial cohort (hypothesis; the cause is not in the data).
+- **Rebuilt and official rates are different populations.** The rebuilt rate is lower (3.95% against 6.39% for February 2017) because the official sample includes users that the demonstration rule leaves out and marks more users as churn, many of them early renewers (the reason is an open question). The two must not be compared directly.
+- **Labels can only be rebuilt up to February 2017.** Transactions end on 31 March 2017, so April renewals are invisible; March 2017 uses the official labels.
+
 ## Data
 
 The data belongs to the Kaggle competition and is **not included in this repository**. To reproduce the audit:
@@ -57,11 +67,11 @@ The data belongs to the Kaggle competition and is **not included in this reposit
    python src/csv_to_parquet.py <path>/user_logs.csv <path>/user_logs_v2.csv --out-dir <parquet folder>
    ```
 3. Copy `local_settings.example.py` to `local_settings.py` and set the Parquet and scratch folders for your machine.
-4. Run `notebooks/01_data_audit.ipynb` from the `notebooks/` directory (the log sections scan about 410 million rows and take minutes).
+4. Run `notebooks/01_data_audit.ipynb` from the `notebooks/` directory (the log sections scan about 410 million rows and take minutes), then `notebooks/02_population_and_churn.ipynb` (a few minutes the first time; results are cached in the git-ignored `data/processed/`).
 
 ```bash
 pip install -r requirements.txt
-python -m unittest tests.test_audit_checks tests.test_audit_display
+python -m unittest tests.test_audit_checks tests.test_audit_display tests.test_churn_labels
 ```
 
 ## Repository
@@ -69,10 +79,12 @@ python -m unittest tests.test_audit_checks tests.test_audit_display
 | Path | Contents |
 |---|---|
 | `notebooks/01_data_audit.ipynb` | The full-data audit, with a release map, findings by table, and decisions |
+| `notebooks/02_population_and_churn.ipynb` | Label rebuild against the official labels, population differences, monthly cohorts and their swings |
 | `src/audit_checks.py` | Reusable DuckDB checks: row counts, missingness, key uniqueness, ranges, date validity, coverage |
+| `src/churn_labels.py` | The official labeller rules rebuilt in DuckDB (population and 30-day renewal label), tested on the official examples |
 | `src/audit_display.py`, `src/csv_to_parquet.py` | Readable notebook output; verified CSV-to-Parquet conversion |
 | `tests/` | Unit tests for the checks and the display helper |
-| `reports/` | Audit report and the data-quality issue register |
+| `reports/` | Audit report, the data-quality issue register, and the figures used above |
 | `docs/` | Data dictionary, churn definition, notes on the official dataset description |
 | `KKBOX_MASTER_PLAN.md` | Scope, roadmap, decisions, and a dated log of every milestone |
 
