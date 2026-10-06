@@ -28,7 +28,7 @@ Public README uses five layers: Python/pandas/Parquet, PostgreSQL, Databricks/Py
 
 ## 1. Purpose and continuity
 
-This document is the source of truth for project scope, architecture, sequencing, decisions, and progress. Read it at the start of future work and update it when a phase, definition, or material decision changes. It expands the original `PROJECT_PLAN.md`; keep that file as the initial charter and reconcile any conflicting roadmap with this document.
+This document is the source of truth for project scope, architecture, sequencing, decisions, and progress. Read it at the start of future work and update it when a phase, definition, or material decision changes. It expands the original project charter (`PROJECT_PLAN.md`, removed on 2026-10-06 and kept in the Git history); this document is the only plan.
 
 The local Git repository is the development workspace. The Codex project should point to that existing directory, rather than create another copy of the repository. ChatGPT project discussions can support learning and ideation; any accepted decisions must be recorded here. A copied or uploaded version is a dated snapshot, not an independently maintained master.
 
@@ -42,7 +42,7 @@ The local Git repository is the development workspace. The Codex project should 
 
 ### Completed setup
 
-The user and prior conversation report that Homebrew, Git, GitHub CLI authentication, repository creation, cloning under `workspace/projects`, staging, committing, and pushing were completed successfully. The first project charter, `PROJECT_PLAN.md`, was created and pushed.
+The user and prior conversation report that Homebrew, Git, GitHub CLI authentication, repository creation, cloning under `workspace/projects`, staging, committing, and pushing were completed successfully. The first project charter, `PROJECT_PLAN.md`, was created and pushed (later removed; see the decision log).
 
 Direct local inspection on 2026-09-25 confirmed the repository directory, initial charter, README, and existing `data/`, `notebooks/`, `reports/`, `sql/`, and `src/` directories. The `.gitignore` contains:
 
@@ -264,7 +264,6 @@ This is a target structure. Create files when their phase needs them; names beyo
 kkbox-retention-analytics/
 ├── README.md
 ├── KKBOX_MASTER_PLAN.md
-├── PROJECT_PLAN.md
 ├── AGENTS.md                         # local only, git-ignored (with CLAUDE.md)
 ├── .gitignore
 ├── requirements.txt                  # Or the dependency format selected later
@@ -366,6 +365,7 @@ The user performs this project step by step in VS Code Jupyter. Provide guidance
 | 2026-10-05 | Record the official dataset description in `docs/source_dataset_notes.md` (documented release map, label definition, field notes). Official windows: `train` = February 2017 expirations, `train_v2` = March 2017, `sample_submission_zero` = original March test set, `sample_submission_v2` = April 2017 test (labels not public). | The user supplied the Kaggle data description. Documented claims stay labeled as documented until verified from local transactions. |
 | 2026-10-05 | Remove the superseded v2-only audit scripts `src/data_audit.py`, `src/audit_keys.py` and `tests/test_data_audit.py` (never committed; a copy was kept outside the repository). The notebook uses `src/audit_checks.py` and `src/audit_display.py` only. | The old scripts cover only the v2 files, hard-code file names, and are replaced by the DuckDB checks that cover v1 and v2; keeping them would be redundant and misleading in the portfolio. |
 | 2026-10-05 | `CLAUDE.md` and `AGENTS.md` stay local only: they are git-ignored and are never committed or pushed (standing instruction). The three unpushed commits of branch `phase1-data-audit` were recreated without them. | The files are private working instructions for AI assistants, not part of the portfolio. |
+| 2026-10-06 | Remove `PROJECT_PLAN.md` from the repository. | It is the original charter and is superseded by this master plan; keeping both duplicated content on the public repository. It remains available in the Git history. |
 | 2026-10-02 | Phase 1 audit restarts on the complete dataset (v1 and v2 files). Audit covers every file, including the 30.51 GB `user_logs.csv`, stored on an external SSD. Large CSVs are converted once to text-typed Parquet (`src/csv_to_parquet.py`) and audited with DuckDB. Earlier audit outputs (v2 files only) are not full-data evidence. | Earlier audit used only v2 files; `transactions_v2` (115 MB) vs `transactions.csv` (1.73 GB) suggests v2 is not the complete history. A full audit must cover all releases and their relationship. |
 
 At the end of a meaningful work session, update the last-updated date, affected phase status, artifact paths, validation evidence, open blockers, decisions, and exact next action. Use the following compact entry format:
