@@ -24,7 +24,7 @@ Public README uses five layers: Python/pandas/Parquet, PostgreSQL, Databricks/Py
 
 **Current state:** Phase 1 (data audit) is complete and published on `main` (README, `notebooks/01_data_audit.ipynb`, reports, register DQ-001 to DQ-019, reusable checks, tests). The label rebuild (`src/churn_labels.py`, `notebooks/02_population_and_churn.ipynb`) reproduces the official February and March 2017 labels for 98.4% and 95.7% of shared users and builds 25 monthly cohorts; it is published with a chart in the README. Open: how early renewers are labeled, why the official sample includes users outside the last-expiration rule, the cause of the batch cohorts, and the `total_secs` treatment.
 
-**Next action:** define cutoffs and feature windows for the prediction stage, then build the relational layer (stage B: PostgreSQL schema, metric definitions, cohort retention SQL) and the behavioral features (stage C), updating the README status table after each block. Later: decide whether to hide or trim this plan on the public repository (reminder). Open check: whether users without logs are the users without member profiles.
+**Next action:** build the relational layer (stage B: PostgreSQL schema, metric definitions, cohort retention SQL) and the behavioral features (stage C) following `docs/prediction_design.md`, updating the README status table after each block. Later: decide whether to hide or trim this plan on the public repository (reminder). Open checks: how early renewers are labeled; whether users without logs are the users without member profiles.
 
 ## 1. Purpose and continuity
 
@@ -678,3 +678,15 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Blockers / dependencies: None.
 - Next action: see "At a glance".
 - Commit or pull request: Two commits on `main` (label module and tests; notebook, figures, README, plan), pushed.
+
+### 2026-10-06 (update 14) — Prediction setup designed
+
+- Date: 2026-10-06
+- Phase and status: Stage A definitions complete (design); stage B next.
+- Changes / artifacts: Added `docs/prediction_design.md` (unit of prediction, cutoff at the end of the previous month, feature windows by family, leakage controls with a purge rule, time-ordered splits, evaluation at capacity K) and updated the README status row and docs map.
+- Validation performed and results (full data, exploratory, read-only): Lead time from the cutoff to the last expiration over the analysis months 2015-07 to 2017-02: 22.0% of user-months have 1–7 days, 22.0% 8–14, 22.2% 15–21, 33.8% 22–31 (churn label rate 10.42%, 6.31%, 6.31%, 6.79%; the first band includes the batch cohorts). In the February 2017 cohort (879,537 users) 68.8% have a listening log in the last 7 days before the cutoff, 77.1% in 30 and 80.5% in 90, so 19.5% have none in 90 days; churn label rate by listening days in the last 30: none 2.76%, 1–5 days 6.10%, 6–15 days 5.55%, 16–25 days 3.80%, 26–30 days 2.36%. Transaction history at the cutoff: median 15 transactions, 8.9% with a first transaction under 90 days earlier, 7.7% with at most two transactions.
+- Findings versus hypotheses: Verified (exploratory): the figures above; the descriptive pattern by listening days is not a causal claim and has been checked for one cohort only. Hypothesis: users without logs form a distinct low-churn group (possibly a different user type); not investigated.
+- Decisions and rationale: Features use data up to T only; all splits are by time; training months for predicting month M are M-2 or earlier (labels complete about 30 days after the end of the month); the official March 2017 file is an external check reported separately; `has_member_profile` is not a feature until shown to be knowable at T; missing behavior is flagged and never treated as zero listening.
+- Blockers / dependencies: None.
+- Next action: see "At a glance".
+- Commit or pull request: None yet.
