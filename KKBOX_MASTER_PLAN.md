@@ -14,7 +14,7 @@ Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
 | Stage | Work | Detailed phases (Section 6) | Status |
 |---|---|---|---|
 | A. Audit and definitions | Full-dataset audit (v1 + v2), issue register, churn definition, cutoff and feature windows | 1, and the definitions part of 3 | **In progress** |
-| B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | 2, descriptive part of 3 | Planned |
+| B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | 2, descriptive part of 3 | **In progress** (database built, SQL analyses next) |
 | C. Behavioral features | `user_logs` to user × cutoff features (Databricks/PySpark) | 4 | Planned |
 | D. Serving and BI | Snowflake marts, Power BI dashboard (Tableau optional) | 5, 6, 7 | Planned |
 | E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | 8 | Planned |
@@ -689,4 +689,16 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Decisions and rationale: Features use data up to T only; all splits are by time; training months for predicting month M are M-2 or earlier (labels complete about 30 days after the end of the month); the official March 2017 file is an external check reported separately; `has_member_profile` is not a feature until shown to be knowable at T; missing behavior is flagged and never treated as zero listening.
 - Blockers / dependencies: None.
 - Next action: see "At a glance".
+- Commit or pull request: None yet.
+
+### 2026-10-06 (update 15) — PostgreSQL layer built and reconciled
+
+- Date: 2026-10-06
+- Phase and status: Stage B (relational analytics) started; database built, SQL analyses next.
+- Changes / artifacts: `sql/postgres/` (schemas `staging` and `analytics`, text staging tables, `\copy` load, typed analytics tables with keys and indexes, `run_all.sh`), `sql/quality/01_reconcile_postgres.sql`, `docs/data_model.md` (schemas, logical ER diagram, key coverage), README status row and repository map.
+- Validation performed and results (full data): all 5 row counts (staging, analytics, audit) and 12 audit figures reproduced from the typed tables, status OK; database about 9.7 GB (analytics 6,408 MB, staging 3,272 MB). Key coverage: transaction users found in members 81.95%, labeled users in members 88.84%, labeled users in transactions 100%.
+- Findings versus hypotheses: Verified: the figures above. No foreign keys on `msno` because unmatched users exist; this follows the rule not to drop records for integrity.
+- Decisions and rationale: two layers (raw text, typed analytics); `user_logs` stays in Parquet (about 410 million rows, PySpark in stage C) and only user-by-month summaries will be loaded.
+- Blockers / dependencies: None.
+- Next action: SQL analyses in `sql/analysis/` (monthly churn, cohort retention, renewal gap, plan mix).
 - Commit or pull request: None yet.
