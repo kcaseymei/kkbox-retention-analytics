@@ -702,3 +702,15 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Blockers / dependencies: None.
 - Next action: SQL analyses in `sql/analysis/` (monthly churn, cohort retention, renewal gap, plan mix).
 - Commit or pull request: None yet.
+
+### 2026-10-07 (update 16) — First SQL analysis block
+
+- Date: 2026-10-07
+- Phase and status: Stage B (relational analytics): first five SQL analyses run by the owner in pgAdmin; monthly churn and cohort retention added (CTEs, window functions).
+- Changes / artifacts: `sql/analysis/01` to `05` (user history, expiring users by month, last-expiration population, official label rate with profile coverage, plan mix with auto-renew), `06_monthly_churn.sql`, `07_cohort_retention.sql`, `reports/sql_analysis.md`; the PostgreSQL layer was committed and pushed (e61c57c).
+- Validation performed and results (full data): official churn label rate 6.39% (v1, 992,931 users) and 8.99% (v2, 970,960), profile missing for 11.66% and 11.33%; February 2017 last-expiration population 883,727 in SQL against 879,537 in the Python rebuild (0.48% difference); 0-day plan count 870,124 equals the audit; plan mix 87.97% 30-day, 5.07% over 30, 4.04% 0-day, 2.91% under 30; simplified SQL monthly churn 4.29% to 18.53% over 2015-07..2017-02 (2017-02: 4.45% against 3.95% in Python); 2016 cohort retention drops about 20-35 points between month 0 and month 1, then levels off near 55-66%.
+- Findings versus hypotheses: Verified: the figures above. Hypothesis: the 4,190-user difference comes from ordering details (plan signature, cancellations); not isolated yet.
+- Decisions and rationale: results are published as SQL files plus a text report, not screenshots; the user-history query prints no identifier.
+- Blockers / dependencies: None.
+- Next action: renewal-gap distribution and plan-type split of cohort retention; then stage C features.
+- Commit or pull request: None yet.
