@@ -68,3 +68,31 @@ Cohort = month of the user's first non-cancel transaction in the data; value = s
 | 2016-06 | 53,514 | 96.4 | 63.2 | 60.6 | 58.9 | 58.7 | 57.6 | 54.9 |
 
 The largest drop is between M0 and M1 (about 20–35 points); afterwards retention levels off near 55–66%. Limits: the data starts on 2015-01-01, so a "first transaction" can be a returning user, not a new subscriber; shares can rise again when lapsed users return (for example 2016-01 at M6). Whether the M0–M1 drop is a trial or one-month-plan effect is a *hypothesis* (plan type not split here).
+
+## 8. Renewal gap — `08_renewal_gap.sql` (runs seconds)
+
+Gap = date of the next non-cancel transaction minus the expiration date, for 18.7 million expirations dated 2015-02-01 to 2017-01-31 (at least 59 days of follow-up; shares are of expirations, not users).
+
+| Gap | Expirations | Share |
+|---|---|---|
+| Early (before expiry) | 4,429,806 | 23.73% |
+| On the expiry day | 9,088,953 | 48.69% |
+| 1–7 days | 3,016,042 | 16.16% |
+| 8–14 days | 188,341 | 1.01% |
+| 15–29 days | 188,636 | 1.01% |
+| 30 or more days (churn under the rule) | 615,500 | 3.30% |
+| No later transaction (churn under the rule) | 1,139,097 | 6.10% |
+
+Renewal is concentrated at the expiry day and the week after (88.6% together with early renewals); only 2.0% renew 8–29 days late, and 9.4% of expirations end as churn under the 30-day rule. The sparse middle band means the 30-day threshold separates quick renewers from lapsed users rather than cutting through a dense group, so results should not be very sensitive to it (to be tested). Early renewals (23.7%) are the group the official labels treat differently (open question).
+
+## 9. Cohort retention by first plan length — `09_cohort_retention_by_plan.sql` (runs about 4 minutes)
+
+Cohorts 2016-01 to 2016-06 pooled (354,741 users), split by the plan length of the first non-cancel transaction; active at the end of month C+k.
+
+| First plan | Users | M0 | M1 | M2 | M3 | M4 | M5 | M6 |
+|---|---|---|---|---|---|---|---|---|
+| 30 days | 302,773 | 100.0 | 70.6 | 62.2 | 61.1 | 61.2 | 61.7 | 62.4 |
+| Over 30 days | 33,722 | 99.8 | 99.7 | 99.3 | 94.0 | 92.6 | 92.4 | 82.8 |
+| Under 30 days | 18,246 | 66.2 | 10.8 | 9.8 | 9.6 | 10.8 | 10.4 | 10.0 |
+
+The month 0 to 1 drop seen in section 7 comes from the 30-day plans (85% of these users, 100% to 70.6%): longer plans keep almost everyone for months, and short plans mostly do not renew (about 10% still active). Plan length of the first transaction is a strong candidate feature, and the pooled curve in section 7 mixes very different groups. This is descriptive; plan choice may reflect user type, not cause retention. Caveat as in section 7: a first transaction may be a returning user.
