@@ -14,7 +14,7 @@ Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
 | Stage | Work | Detailed phases (Section 6) | Status |
 |---|---|---|---|
 | A. Audit and definitions | Full-dataset audit (v1 + v2), issue register, churn definition, cutoff and feature windows | 1, and the definitions part of 3 | **In progress** |
-| B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | 2, descriptive part of 3 | **In progress** (database built, SQL analyses next) |
+| B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | 2, descriptive part of 3 | **Complete** (database, 9 SQL analyses, report) |
 | C. Behavioral features | `user_logs` to user × cutoff features (Databricks/PySpark) | 4 | Planned |
 | D. Serving and BI | Snowflake marts, Power BI dashboard (Tableau optional) | 5, 6, 7 | Planned |
 | E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | 8 | Planned |
@@ -713,4 +713,16 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Decisions and rationale: results are published as SQL files plus a text report, not screenshots; the user-history query prints no identifier.
 - Blockers / dependencies: None.
 - Next action: renewal-gap distribution and plan-type split of cohort retention; then stage C features.
+- Commit or pull request: None yet.
+
+### 2026-10-10 (update 17) — Stage B closed: renewal gap and retention by plan
+
+- Date: 2026-10-10
+- Phase and status: Stage B (relational analytics) complete; stage C (behavioral features) next.
+- Changes / artifacts: `sql/analysis/08_renewal_gap.sql`, `09_cohort_retention_by_plan.sql`, sections 8 and 9 of `reports/sql_analysis.md`, README "What the SQL analysis found" and status row.
+- Validation performed and results (full data): renewal gaps for 18.7 million expirations (2015-02..2017-01): early 23.73%, on expiry day 48.69%, 1-7 days 16.16%, 8-14 days 1.01%, 15-29 days 1.01%, 30+ days 3.30%, no later transaction 6.10%. Cohort retention 2016-01..06 (354,741 users; the plan groups sum to the 354,741 of update 16): first plan 30 days 100.0 -> 70.6% after one month, 62.4% after six; over 30 days 99.7% after one month, 82.8% after six; under 30 days 10.8% after one month.
+- Findings versus hypotheses: Verified: the figures; the month 0-1 retention drop comes from 30-day first plans (confirms the earlier hypothesis that plan length matters). Hypotheses: the 30-day threshold is insensitive because the 8-29 day band is sparse (to be tested with other thresholds); plan choice reflects user type rather than causing retention.
+- Decisions and rationale: plan length of the first transaction is a feature candidate; early renewals (23.73%) remain the open labeling question.
+- Blockers / dependencies: None.
+- Next action: stage C: summarize user logs (DuckDB) into user-by-month features respecting the cutoff rules of `docs/prediction_design.md`.
 - Commit or pull request: None yet.

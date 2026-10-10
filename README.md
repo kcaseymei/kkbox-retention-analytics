@@ -27,7 +27,7 @@ The first stage, a **full-data audit of both data releases (about 444 million ro
 | Stage | Work | Status |
 |---|---|---|
 | A. Audit and definitions | Audit of all source files, issue register, churn definition, label rebuild, monthly cohorts, cutoffs and feature windows | **Audit, label check and monthly cohorts complete**; prediction setup designed ([cutoffs, windows, splits](docs/prediction_design.md)) |
-| B. Relational analytics | PostgreSQL, metric definitions, cohort retention and renewal SQL | **Database built and reconciled with the audit** (staging and analytics schemas, [data model](docs/data_model.md)); SQL analyses next |
+| B. Relational analytics | PostgreSQL, metric definitions, cohort retention and renewal SQL | **Complete: database built and reconciled with the audit** (staging and analytics schemas, [data model](docs/data_model.md)); [SQL analyses](reports/sql_analysis.md): label rates, plan mix, monthly churn, renewal gap, cohort retention |
 | C. Behavioral features | `user_logs` to user-by-cutoff features (Databricks / PySpark) | Planned |
 | D. Serving and BI | Snowflake marts and a Power BI dashboard | Planned |
 | E. Prediction | Baseline plus one stronger model with time-aware validation, top-k evaluation | Planned |
@@ -46,6 +46,13 @@ All figures are full-data results (every row), reproduced in [the audit notebook
 - **Behavior data has gaps and impossible values.** About 12% of labeled and test users have no listening log at all, and `total_secs` contains negative and absurdly large values (up to about 9.2 quadrillion seconds) in roughly 0.05% of rows, enough to ruin any sum or average.
 
 Nineteen data-quality items are tracked in the [issue register](reports/data_quality_issues.md) with evidence, risk, and a planned treatment. **No treatment has been applied yet**; source data is never modified.
+
+## What the SQL analysis found
+
+Full-data results from PostgreSQL ([queries](sql/analysis/), [report](reports/sql_analysis.md)); descriptive only.
+- **Renewal is fast or it does not happen.** Of 18.7 million expirations, 88.6% are followed by a renewal before expiry, on the expiry day, or within a week; only 2.0% renew 8–29 days late, and 9.4% end as churn under the 30-day rule.
+- **Retention depends on the first plan.** Among 2016 first-time subscribers (354,741), those on a 30-day plan fall from 100% to 70.6% active after one month and then level off near 62%; longer plans stay above 90% for five months, plans under 30 days end near 10%.
+- **Simplified SQL churn swings from 4.3% to 18.5% a month** (2015-07 to 2017-02), with the largest spike in March 2016; the cause is not yet investigated.
 
 ## Churn over time
 
