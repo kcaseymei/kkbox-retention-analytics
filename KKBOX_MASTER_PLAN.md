@@ -16,7 +16,7 @@ Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
 | A. Audit and definitions | Full-dataset audit (v1 + v2), issue register, churn definition, cutoff and feature windows | 1, and the definitions part of 3 | **In progress** |
 | B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | 2, descriptive part of 3 | **Complete** (database, 9 SQL analyses, report) |
 | C. Behavioral features | `user_logs` to user × cutoff features (Databricks/PySpark) | 4 | Planned |
-| D. Serving and BI | Snowflake marts, Power BI dashboard (Tableau optional) | 5, 6, 7 | Planned |
+| D. Serving and BI | Snowflake marts built with dbt (staging and mart models, data tests), Power BI dashboard (Tableau and a Streamlit app optional) | 5, 6, 7 | Planned |
 | E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | 8 | Planned |
 | F. Recommendations and write-up | Intervention and experiment design, README, case study | 9, 10 | Planned |
 
@@ -97,6 +97,7 @@ The eight analytical questions above collapse into four: (1) what churn looks li
 
 - Phase 3 definitions (cutoff, feature windows, eligible population) are fixed during stage A so stage C does not need rework. **Cutoff** = the as-of date for prediction: data before it builds features, data after it only determines the outcome label.
 - Tableau and Fabric are optional extensions after the main line is complete.
+- Optional extension (added 2026-10-10): a **Streamlit app** with an interactive churn view (monthly churn, cohort retention by plan, and a capacity slider K = 5/10/20% showing how many churners a random list or a model list reaches). It reads only small **aggregated** tables exported from the marts (no `msno`, no raw rows), so it can be hosted publicly. Built after stage E, when model results exist; dropped first if time is short.
 - Stage A completion standard: core-table audit and issue register done, `train_v2` label window verified against transactions; remaining items are recorded as known unresolved, not expanded.
 - Cohort retention over time may require reconstructing labels per month from transactions. This depends on the unverified assumption that the supplied labels cover only one or two expiration months; verify in stage A.
 - Each stage needs one demonstrable artifact (see the 2026-10-02 update entry).
@@ -221,6 +222,8 @@ Load curated structured data and Gold behavioral aggregates into a conformed war
 Separate a KPI-serving snapshot from a training/prediction snapshot where their eligibility or timing differs. Reconcile warehouse measures to validated source analyses.
 
 Outputs: warehouse DDL/transforms, mart documentation, reconciliation checks, and a runbook. Completion requires consistent definitions and a reproducible load path for BI.
+
+**dbt (added 2026-10-10).** Build the marts as a dbt project (dbt-core): staging models (typed views over the loaded tables) and mart models (monthly churn cohorts, user-by-month features, cohort retention; two or three marts, not more), with documented grain and keys. Develop and test the models first on the local PostgreSQL or DuckDB layer, then run them on Snowflake, so the limited Snowflake trial is used only for the final run and demonstration. Data tests: `unique` and `not_null` on keys (for example `msno` in members), `accepted_values` for `is_churn` (0, 1), `relationships` from transactions and labels to members with severity `warn` (only 81.95% and 88.84% of users match; records are not dropped), and custom tests that reconcile row counts and key audit figures with the audit and that no feature uses data after its cutoff (leakage test). Connection settings (`profiles.yml`) live outside the repository; no credentials are committed. Do not open the Snowflake trial before the stage C feature tables exist, and do not claim the dbt work in the README or resume until models and passing tests are in the repository.
 
 ### Phase 6 — Power BI executive dashboard
 
@@ -725,4 +728,22 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Decisions and rationale: plan length of the first transaction is a feature candidate; early renewals (23.73%) remain the open labeling question.
 - Blockers / dependencies: None.
 - Next action: stage C: summarize user logs (DuckDB) into user-by-month features respecting the cutoff rules of `docs/prediction_design.md`.
+- Commit or pull request: None yet.
+
+### 2026-10-10 (update 18) — Optional Streamlit app added to the roadmap
+
+- Date: 2026-10-10
+- Phase and status: Planning only; stage B committed and pushed (4df2d05).
+- Changes / artifacts: Stage D row and extension list in this plan.
+- Decisions and rationale: Streamlit app is an optional extension after stage E, fed by aggregated tables only; it gives hiring managers a clickable link, which a Power BI desktop file does not. Lowest priority.
+- Next action: see "At a glance" (stage C).
+- Commit or pull request: None yet.
+
+### 2026-10-10 (update 19) — dbt added to stage D
+
+- Date: 2026-10-10
+- Phase and status: Planning only.
+- Changes / artifacts: Phase 5 and the stage D row now describe the marts as a dbt project with staging and mart models and data tests (details in Phase 5).
+- Decisions and rationale: dbt shows modeling as tested, versioned code rather than single queries and reuses the audit results as tests; develop locally first to save the Snowflake trial; relationships tests are warnings because unmatched users are kept; no claim before models and passing tests exist.
+- Next action: see "At a glance" (stage C).
 - Commit or pull request: None yet.
