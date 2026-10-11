@@ -15,7 +15,7 @@ Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
 |---|---|---|---|
 | A. Audit and definitions | Full-dataset audit (v1 + v2), issue register, churn definition, cutoff and feature windows | 1, and the definitions part of 3 | **In progress** |
 | B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | 2, descriptive part of 3 | **Complete** (database, 9 SQL analyses, report) |
-| C. Behavioral features | `user_logs` to user × cutoff features (Databricks/PySpark) | 4 | Planned |
+| C. Behavioral features | `user_logs` to user × cutoff features (DuckDB first, Databricks/PySpark later) | 4 | **In progress** (listening features for one month done) |
 | D. Serving and BI | Snowflake marts built with dbt (staging and mart models, data tests), Power BI dashboard (Tableau and a Streamlit app optional) | 5, 6, 7 | Planned |
 | E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | 8 | Planned |
 | F. Recommendations and write-up | Intervention and experiment design, README, case study | 9, 10 | Planned |
@@ -746,4 +746,16 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Changes / artifacts: Phase 5 and the stage D row now describe the marts as a dbt project with staging and mart models and data tests (details in Phase 5).
 - Decisions and rationale: dbt shows modeling as tested, versioned code rather than single queries and reuses the audit results as tests; develop locally first to save the Snowflake trial; relationships tests are warnings because unmatched users are kept; no claim before models and passing tests exist.
 - Next action: see "At a glance" (stage C).
+- Commit or pull request: None yet.
+
+### 2026-10-11 (update 20) — Stage C started: listening features for February 2017
+
+- Date: 2026-10-11
+- Phase and status: Stage C (behavioral features) in progress; one month done, all months next.
+- Changes / artifacts: `src/behavior_features.py` (`listening_features`: active days, plays, valid seconds, unique songs, completed share over 7/14/30/60/90-day windows, days since last log, two trends, flags), `tests/test_behavior_features.py` (10 tests pass), `notebooks/03_behavioral_features.ipynb` (run by the owner; sections 0-3 executed).
+- Validation performed and results (full data, February 2017 population of 879,537 users, cutoff 2017-01-31): users with a log in the last 7, 30, 90 days 68.85%, 77.11%, 80.48% (the exploratory figures were 68.8%, 77.1%, 80.5%); 171,705 users (19.52%) with no log in 90 days; 0.46% with an invalid `total_secs` day in the window; among 707,832 users with a log: median 17 listening days and 406 plays in 30 days. Churn label rate by listening days in the last 30: none 2.76% (201,314 users), 1-5 days 6.10%, 6-15 5.55%, 16-25 3.80%, 26-30 2.36%, identical to the exploratory result.
+- Findings versus hypotheses: Verified: the figures above (one month, descriptive). Hypothesis: users with no listening and a low churn label rate are a different user type; not examined.
+- Decisions and rationale: feature logic lives in `src/` with tests so every cutoff reuses it; missing listening is flagged, not zero; invalid seconds are missing with a flag.
+- Blockers / dependencies: The user-log Parquet files are on the external drive (must be connected).
+- Next action: subscription-history features (C3), a leakage check, and all months (C4); split the no-listening group by plan, auto-renew, and tenure.
 - Commit or pull request: None yet.
