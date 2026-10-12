@@ -759,3 +759,15 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Blockers / dependencies: The user-log Parquet files are on the external drive (must be connected).
 - Next action: subscription-history features (C3), a leakage check, and all months (C4); split the no-listening group by plan, auto-renew, and tenure.
 - Commit or pull request: None yet.
+
+### 2026-10-11 (update 21) — Subscription and profile features for February 2017
+
+- Date: 2026-10-11
+- Phase and status: Stage C (behavioral features) in progress: listening features (update 20) and subscription/profile features done for one month.
+- Changes / artifacts: `src/subscription_features.py` (`subscription_features`, `profile_features`), `tests/test_subscription_features.py` (8 tests; 49 tests pass in total), `notebooks/03_behavioral_features.ipynb` sections 5-7 (run by the owner).
+- Validation performed and results (full data, February 2017, 879,537 users, cutoff 2017-01-31): median 15 transactions, 8.89% first transaction under 90 days before the cutoff, 7.70% with at most two transactions (match the design document); 27.52% have their first transaction in the first month of data (tenure truncated); lead time bands 22.77% / 22.10% / 23.00% / 32.14%. Churn label rate (rebuilt labels) by last auto-renew: off 21.39% (104,532 users), on 1.60% (775,005); by transactions so far: 15.01% (1-2), 6.53%, 4.12%, 2.35%, 1.19% (25+); cancellations in the last 90 days 9.36% against 3.78%; last plan over 30 days 27.06% (20,740), 1-29 days 48.73% (1,849), 30 days 3.30%; zero last payment 39.19% (4,021); lead time 4.18% / 4.09% / 3.98% / 3.68%. Group sizes add up to 879,537 in every table.
+- Findings versus hypotheses: Verified (one month, descriptive): the figures above. Auto-renew off holds about 64% of the churners in about 12% of users (computed from rounded rates), so "no auto-renew" is the baseline rule a model must beat. Hypothesis: the small high-churn groups (plans under 30 days, zero payment) reflect trials or promotions; not examined.
+- Decisions and rationale: tenure is flagged as left-censored; `has_member_profile` stays a diagnostic, not a feature; lead time is reported as a dimension of evaluation because it hardly separates churners.
+- Blockers / dependencies: None.
+- Next action: leakage check and all target months (C4), writing the feature table; then examine the no-listening group; stage D.
+- Commit or pull request: None yet.
