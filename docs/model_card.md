@@ -33,12 +33,13 @@ Logistic regression and gradient boosting (`HistGradientBoostingClassifier`, fix
 
 ## Honest assessment of usefulness
 
-The model clearly beats a random list and, on the rebuilt labels, the best simple rule by about 14 to 19 points of recall at 10% capacity. On the official March labels the advantage over the auto-renew rule disappears at 10% capacity. A logistic regression performs about as well as gradient boosting on the rebuilt months. Listening features add little on top of the subscription record (about 1 point at 10%). Before any use, the early-renewer labeling and the March population mismatch need to be understood; an experiment would be required to know whether contacting the listed users retains anyone.
+The model clearly beats a random list and, on the rebuilt labels, the best simple rule by about 14 to 19 points of recall at 10% capacity. On the official labels the advantage shrinks: on the same February users the model reaches 60.8% of the churners at 10% capacity against 52.6% for the auto-renew rule (68.1% against 54.0% with rebuilt labels), and in March 2017 it leads the rule by 2.5 points inside the rebuilt population and ties it overall, because 11.2% of the official users (28% of the churners) fall outside the population the model was built for. The model should be applied only to users whose last expiration lies in the coming month. A logistic regression performs about as well as gradient boosting on the rebuilt months. Listening features add little on top of the subscription record (about 1 point at 10%). Before any use, the remaining label disagreements (about 6,500 in February) need to be understood; an experiment would be required to know whether contacting the listed users retains anyone.
 
 ## Known limitations
 
 - Three evaluation months; performance drifts (AUC 0.885, 0.865, 0.810).
-- Rebuilt labels differ from official labels for early renewers (open question); 108,802 official March users fall outside the rebuilt population rule.
+- Rebuilt labels differ from official labels for early renewers (supported hypothesis: the official files seem to ignore early renewals; agreement 99.25% in February, about 6,500 disagreements unexplained); 108,802 official March users fall outside the rebuilt population rule.
+- The official label files are training labels, not the competition test set; results are not leaderboard scores.
 - Members file is a later snapshot (2017-11); profile columns add nothing in the ablation, so they are not relied on.
 - The two transaction releases overlap on 7,249 (user, date) keys and are stacked without a de-duplication rule; effects on counts and averages for the affected users are not quantified.
 - Payment method codes are used as categories without known meanings.

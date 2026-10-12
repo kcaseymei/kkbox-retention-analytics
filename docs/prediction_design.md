@@ -48,6 +48,6 @@ Status: **implemented** (features: stage C; models and evaluation: stage E, see 
 
 ## 7. Open questions
 
-- How early renewers are labeled (affects labels and the March check).
+- How early renewers are labeled by the official files: a supported hypothesis (the gap is measured from the first non-cancellation transaction on or after the expiration, agreement 99.25% in February; see `docs/churn_definition.md`); about 6,500 February disagreements remain, and March cannot be tested because of censoring.
 - Whether to model all months together or to down-weight batch cohorts.
 - Whether the strong signal of listening days holds across months (to be tested in the feature stage).

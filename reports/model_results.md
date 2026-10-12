@@ -51,7 +51,21 @@ Contacting 10% of February's expiring users with the gradient boosting list reac
 | Logistic regression | 18.7% | 33.9% | 65.7% | 3.39 | 0.773 |
 | Rule: no auto-renew | 22.9% | 45.9% | 58.4% | 4.59 | 0.733 |
 
-**On the official March labels the model does not clearly beat the auto-renew rule at 10%** (44.9% against 45.9%); it is better at 5% (27.9% against 22.9%) and 20% (65.6% against 58.4%), and its AUC is higher (0.810 against 0.733). Performance is much lower than on the rebuilt months. Part of the reason is the population: 108,802 of the 970,960 official users have a last expiration outside March (or no history at the cutoff) and fall outside the rebuilt rule; their churn rate is 22.7% and they are not on the 1 to 31 day lead-time scale. The remaining difference is the labeling of early renewers (open question). Calibration is also off in March: in the highest-risk bins the observed churn rate is higher than predicted (for example 18.6% observed against 11.4% predicted in the ninth decile).
+The advantage over the auto-renew rule at 10% capacity shrinks in steps (gradient boosting against the rule):
+
+| Evaluation | Gradient boosting | Rule | Lead |
+|---|---|---|---|
+| February, rebuilt labels (879,478 users in both label sets) | 68.1% | 54.0% | +14.1 |
+| February, official labels (same users) | 60.8% | 52.6% | +8.2 |
+| March, official labels, users inside the rebuilt population (862,158) | 55.3% | 52.8% | +2.5 |
+| March, official labels, all users (970,960) | 44.9% | 45.9% | -1.0 |
+
+(Exploratory, read-only evaluation with the same settings and training months; the lists inside the March population are ranked within that group.)
+
+- **Label definition (about 7 points for the model, 1.4 for the rule):** the 14,193 February users labeled renewed by the rebuild and churn by the official file are mostly early renewers; the model gives them a mean churn probability of 12.8% (overall 4.1%), so they look at risk rather than random. See `docs/churn_definition.md` for the label comparison.
+- **Month (about 5 points):** unexplained drift between February and March; not decomposed further.
+- **Population (about 10 points):** 108,802 official March users fall outside the rebuilt rule: last expiration after March 85,465 (churn 16.6%), before March 20,813 (43.8%), no history at the cutoff 2,524 (54.7%). They hold 28.3% of the churners and the model has almost no skill on them (AUC 0.575 against 0.627 for the rule); the model is meant for users whose last expiration lies in the coming month.
+- Calibration is also off in March: in the highest-risk bins the observed churn rate is higher than predicted (for example 18.6% observed against 11.4% predicted in the ninth decile).
 
 ## Which features matter (ablation, gradient boosting)
 
@@ -77,7 +91,7 @@ On the test months the predicted probabilities follow the observed rates: in the
 ## Limits
 
 - Evaluated on three months; the numbers differ from month to month (AUC 0.885, 0.865, 0.810), so the figures above should not be read as a stable level.
-- Rebuilt labels follow the demonstration rule of the official labeller; the external month with official labels is much weaker, so the headline recall values probably overstate performance under the official definition.
+- Rebuilt labels follow the demonstration rule of the official labeller and differ from the official files for early renewers (supported hypothesis, see `docs/churn_definition.md`); with the official labels the lead over the auto-renew rule is smaller (8.2 against 14.1 points in February), so the headline recall values overstate performance under the official definition. The official files are training labels, not the competition test set: these are not leaderboard scores.
 - Predicted risk is not the likelihood of responding to an offer. The results say who is likely to lapse, not who can be saved.
 - No intervention effect and no financial return is claimed.
 - The member profile is a later snapshot (2017-11) and the two transaction releases overlap on 7,249 (user, date) keys; the overlap rule is not verified (see the model card).

@@ -108,3 +108,33 @@ Before claiming reconstruction, align the transaction release, history start/cut
 Join reconstructed labels to `train_v2` by `msno`, checking uniqueness and reporting both population coverage and users present on only one side. Normalize Boolean labels to `0/1`, then report agreement, a confusion matrix, and mismatch counts on the matched, observable population. Inspect mismatches by cancellation/plan-change history, same-day ordering, gap boundaries (29/30/31 days), early renewal, no activity, cancellation-only futures, invalid dates, and missing history/follow-up. Record any deliberate departure from the Scala code.
 
 Current status: source-code inspection and documentation only. No Spark execution, reconstructed-label comparison, agreement rate, or claim of reproducing `train_v2.is_churn` has been made.
+
+## Rebuilt labels versus the official label files
+
+The project uses two kinds of labels. Both describe "no renewal within 30 days of the last expiration", but they are not the same data.
+
+| Aspect | Rebuilt labels (`src/churn_labels.py`) | Official files (`train.csv`, `train_v2.csv`) |
+|---|---|---|
+| Source | Computed from the transactions with the rules of the supplied Scala labeller | Supplied by the organizers |
+| Months | 2015-02 to 2017-02 (25 months; models use 2015-07 to 2017-02) | 2017-02 and 2017-03 only |
+| Population | Users whose **last** expiration at the cutoff lies in the target month | A superset: the rule "any transaction expiring in the month" covers 99.06% (February) and 98.68% (March) of the official users; 108,802 official March users (11.2%) fall outside the strict rule, including 2,524 with no transaction before the cutoff |
+| Size (February / March) | 879,537 / 886,500 | 992,931 / 970,960 (overlap 879,478 and 862,158) |
+| Early renewals (renewal dated before the expiration) | Count as renewed | Apparently ignored: 11-14% of early renewers are labeled churn (hypothesis below) |
+| History used | From 2015-01-01 | The supplied script uses January 2017 only; the files do not follow it exactly |
+| Churn rate (February / March) | 3.95% / not reliable | 6.39% / 8.99% |
+| Agreement among shared users | 98.36% (February), 95.73% (March) | |
+| Reliable until | February 2017 | Both months |
+| Role in the project | Training, validation, and the final test (2017-01, 2017-02) | External check (2017-03) only |
+
+### Why rebuilt March labels are not used
+
+The **population** of March (last expiration at 2017-02-28 inside March, 886,500 users) is complete. The **labels** are not: renewal is judged up to 30 days after the expiration, so a user expiring on 2017-03-20 who renews on 2017-04-05 needs April transactions, and the data ends on 2017-03-31 (right censoring). Such users would be labeled churn. February is safe: 2017-02-28 plus 30 days is 2017-03-30. Rebuilt labels therefore stop at 2017-02.
+
+### How the official labels treat early renewals (hypothesis, supported)
+
+For the 14,193 February users labeled renewed by the rebuild and churn in the official file, most renewed before their expiration and renewed again about a month later. Measuring the gap to the **first non-cancellation transaction dated on or after the (cancellation-adjusted) expiration**, instead of the first one after the cutoff, raises the agreement with the official February labels from 98.36% to **99.25%** (disagreements 14,392 to 6,567). Under this reading a user who renewed early and kept subscribing can still be labeled churn. About 6,500 disagreements remain unexplained, March cannot be tested (censoring), and the supplied script, read literally, counts early renewals as renewals; the files may come from another version of the script or of the data. Exploratory result (read-only), not part of the demonstration script.
+
+### The official files are training labels, not the competition test set
+
+`train.csv` (February 2017) and `train_v2.csv` (March 2017) are labeled training cohorts. The competition test roster is `sample_submission_v2.csv` (April 2017 window, 907,471 users) and its labels are not public (*documented*, not verifiable locally). The "test months" in this project are time-held-out months (2017-01, 2017-02) with rebuilt labels; 2017-03 with official labels is an external check, so the results are not leaderboard scores.
+

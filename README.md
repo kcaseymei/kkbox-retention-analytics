@@ -54,9 +54,9 @@ Time-ordered validation (training stops before the month's labels are complete),
 ![Churners reached by capacity](reports/figures/recall_at_capacity.png)
 
 - **On the rebuilt labels the models beat the simple rule.** Contacting 10% of the expiring users reaches 71.9% (January 2017) and 68.1% (February 2017) of the churners with the gradient boosting list, against 52.5% and 54.2% for "last transaction has auto-renew off" and 10% for a random list.
-- **On the official March 2017 labels the advantage over that rule disappears at 10% capacity** (44.9% against 45.9%; better at 5% and 20%). 108,802 official users fall outside the rebuilt population rule, and early renewers are labeled differently, so the headline figures probably overstate performance under the official definition.
+- **On the official labels the advantage over the simple rule shrinks.** On the same 879,478 February users the gradient boosting list reaches 68.1% of the churners at 10% capacity with the rebuilt labels and 60.8% with the official labels (the auto-renew rule: 54.0% and 52.6%); the official labels probably count some early renewers who kept subscribing as churn. In March 2017 (official labels) the model leads the rule by 2.5 points inside the rebuilt population (55.3% against 52.8%) and ties it overall (44.9% against 45.9%), because 108,802 official users (11.2%, 28% of the churners) fall outside that population and the model has no skill on them.
 - **Listening behavior adds little on top of the subscription record:** about 1 point of recall at 10% when added; alone it reaches about three times a random list. Logistic regression is within 1 point of gradient boosting on the rebuilt months.
-- **Limits:** three evaluation months with falling AUC (0.885, 0.865, 0.810); predicted risk is not the likelihood of responding to an offer; no effect of any action is claimed.
+- **Limits:** three evaluation months with falling AUC (0.885, 0.865, 0.810); predicted risk is not the likelihood of responding to an offer; no effect of any action is claimed; the official files are training labels, so these results are not Kaggle leaderboard scores.
 
 ## What the SQL analysis found
 
