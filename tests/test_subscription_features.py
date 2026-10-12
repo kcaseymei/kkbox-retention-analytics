@@ -57,6 +57,13 @@ class SubscriptionTests(unittest.TestCase):
                 tx('a', '20160210', '20160211', cancel=1, plan='30'), tx('a', '20160301', '20160401', plan='30')]
         self.assertEqual(features(rows, ['a']).loc['a', 'n_plan_changes'], 2)
 
+    def test_plan_changes_do_not_depend_on_row_order_of_ties(self):
+        rows = [tx('a', '20160831', '20160905', plan='30'), tx('a', '20160831', '20160905', plan='7'),
+                tx('a', '20160831', '20161204', plan='90'), tx('a', '20161201', '20170103', plan='30')]
+        forward = features(rows, ['a']).loc['a', 'n_plan_changes']
+        backward = features(rows[::-1], ['a']).loc['a', 'n_plan_changes']
+        self.assertEqual(forward, backward)
+
     def test_zero_price_flags(self):
         rows = [tx('a', '20161201', '20170101', paid='0'), tx('a', '20170101', '20170201', paid='100')]
         row = features(rows, ['a']).loc['a']

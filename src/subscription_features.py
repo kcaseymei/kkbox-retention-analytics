@@ -30,13 +30,15 @@ def subscription_features(con, tx_relation, users_relation, cutoff, history_star
             WHERE transaction_date >= '{history_start}' AND transaction_date <= '{cutoff}'),
         last_row AS (
             SELECT * FROM (
-                SELECT *, row_number() OVER (PARTITION BY msno ORDER BY {_LAST_ROW.format(p='')}) AS rn FROM t)
+                SELECT *, row_number() OVER (PARTITION BY msno ORDER BY {_LAST_ROW.format(p='')},
+                                           actual_amount_paid, is_auto_renew) AS rn FROM t)
             WHERE rn = 1),
         plan_changes AS (
             SELECT msno, count(*) FILTER (WHERE prev IS NOT NULL AND prev <> plan_days) AS n_plan_changes
             FROM (SELECT msno, payment_plan_days AS plan_days,
                          lag(payment_plan_days) OVER (PARTITION BY msno
-                             ORDER BY transaction_date, membership_expire_date) AS prev
+                             ORDER BY transaction_date, membership_expire_date, payment_plan_days,
+                                      plan_list_price, payment_method_id) AS prev
                   FROM t WHERE is_cancel = '0')
             GROUP BY msno),
         agg AS (

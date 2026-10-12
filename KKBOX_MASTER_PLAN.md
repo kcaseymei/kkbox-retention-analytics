@@ -15,7 +15,7 @@ Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
 |---|---|---|---|
 | A. Audit and definitions | Full-dataset audit (v1 + v2), issue register, churn definition, cutoff and feature windows | 1, and the definitions part of 3 | **In progress** |
 | B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | 2, descriptive part of 3 | **Complete** (database, 9 SQL analyses, report) |
-| C. Behavioral features | `user_logs` to user × cutoff features (DuckDB first, Databricks/PySpark later) | 4 | **In progress** (listening features for one month done) |
+| C. Behavioral features | `user_logs` to user × cutoff features (DuckDB first, Databricks/PySpark later) | 4 | **In progress** (features for all months built and leakage-checked) |
 | D. Serving and BI | Snowflake marts built with dbt (staging and mart models, data tests), Power BI dashboard (Tableau and a Streamlit app optional) | 5, 6, 7 | Planned |
 | E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | 8 | Planned |
 | F. Recommendations and write-up | Intervention and experiment design, README, case study | 9, 10 | Planned |
@@ -770,4 +770,16 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Decisions and rationale: tenure is flagged as left-censored; `has_member_profile` stays a diagnostic, not a feature; lead time is reported as a dimension of evaluation because it hardly separates churners.
 - Blockers / dependencies: None.
 - Next action: leakage check and all target months (C4), writing the feature table; then examine the no-listening group; stage D.
+- Commit or pull request: None yet.
+
+### 2026-10-12 (update 22) — Feature table for all months and leakage checks
+
+- Date: 2026-10-12
+- Phase and status: Stage C (behavioral features): feature table built for all target months and checked for leakage; notebook sections 8-9 run by the owner (outputs match the script run).
+- Changes / artifacts: `src/build_features.py` (one Parquet file per target month, 63 columns, in the git-ignored `data/processed/features/`; 2015-07 to 2017-02 with rebuilt labels, 2017-03 with the official labels), `src/leakage_checks.py` (cutoff invariance, single-feature AUC alert, purge rule, one row per user and month), `tests/test_leakage_checks.py`; fixes in `src/subscription_features.py` (deterministic tie order); 58 tests pass in total; `notebooks/03_behavioral_features.ipynb` section 8.
+- Validation performed and results (full data, run by Claude as a script; the notebook reproduces it): the first invariance run found 1,341 (February 2017) and 1,364 (March 2016) differing values, all of them explained and none a leak: `secs_30/60/90` differed by about 1e-15 relative (floating-point summation order; comparison changed to a relative tolerance) and one user's `n_plan_changes` depended on the order of three transactions with the same date and expiration (a deterministic tie order was added). After the fixes and a full rebuild, both months show 0 differing values in all 51 features. Population counts match the labels of every month, no duplicate (user, month) rows, no missing labels; churn label rate per month 3.82% to 17.97% (rebuilt) and 8.99% (2017-03, official). Highest single-feature AUC 0.769 (transactions in the last 90 days), then 0.734 (all transactions), 0.694 (auto-renew), 0.669 (tenure), 0.627 (listening days in 90): no feature near the 0.90 alert (sample of 120,000 users per month, 2.4 million rows). The planned expanding-window splits satisfy the purge rule (training months at most M-2) for validation months 2016-07 to 2017-02.
+- Findings versus hypotheses: Verified: the checks above. A passing check shows no use of post-cutoff data in the checked features at two cutoffs; it does not cover the member profile snapshot (a 2017-11 file), which is handled by the registration-date rule and the exclusion of `has_member_profile`. Single-feature AUC is a leakage alert, not model performance.
+- Decisions and rationale: ties in transaction order are broken deterministically; sums are compared with a relative tolerance; invariance is run on two cutoffs (2017-02, 2016-03) because each run takes minutes.
+- Blockers / dependencies: The external drive must be connected to rebuild the features.
+- Next action: owner runs notebook section 8; then examine the no-listening group, and start stage D (dbt models and tests on the feature table) or stage E (baselines).
 - Commit or pull request: None yet.
