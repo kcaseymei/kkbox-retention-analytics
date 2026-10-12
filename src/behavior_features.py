@@ -7,7 +7,8 @@ A *relation* is a DuckDB table or view with the user-log columns as text (``msno
 ``YYYYMMDD``, ``num_25``, ``num_50``, ``num_75``, ``num_985``, ``num_100``, ``num_unq``, ``total_secs``).
 Users without any log in the 90-day window get ``has_log_90 = False`` and missing (NULL) feature values:
 absent listening is not zero listening. ``total_secs`` outside 0 to 86,400 is treated as missing and the
-user is flagged in ``has_invalid_secs_90`` (DQ-001); source values are not altered.
+user is flagged in ``has_invalid_secs_90`` (DQ-001); source values are not altered. A user whose seconds in a window
+are all invalid gets ``secs_w = 0`` (plus the flag), not a missing value.
 """
 import re
 from datetime import datetime, timedelta

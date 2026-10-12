@@ -63,6 +63,10 @@ class SplitTests(unittest.TestCase):
         self.assertTrue(lc.check_purge(['2016-10', '2016-11'], '2017-01'))
         self.assertFalse(lc.check_purge(['2016-10', '2016-12'], '2017-01'))
         self.assertTrue(lc.check_purge(['2015-07'], '2017-02'))
+        # January's last expirations are complete only on 2017-03-02, after the 2017-02-28 cutoff of March
+        self.assertFalse(lc.check_purge(['2016-12', '2017-01'], '2017-03'))
+        self.assertTrue(lc.check_purge(['2016-12'], '2017-03'))
+        self.assertTrue(lc.check_purge(['2016-11'], '2017-01'))     # complete on 2016-12-30
 
     def test_duplicate_rows(self):
         frame = pd.DataFrame({'msno': ['u', 'u', 'v'], 'target_month': ['2017-01', '2017-01', '2017-01']})

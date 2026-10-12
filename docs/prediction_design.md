@@ -1,6 +1,6 @@
 # Prediction setup: cutoffs, feature windows, splits, and leakage controls
 
-Status: **design, not implemented yet** (the feature tables and models are later stages). Facts quoted below are full-data results from `notebooks/01_data_audit.ipynb`, `notebooks/02_population_and_churn.ipynb`, or exploratory read-only checks (marked *exploratory*). Items marked *hypothesis* are not verified.
+Status: **implemented** (features: stage C; models and evaluation: stage E, see `reports/model_results.md`). Facts quoted below are full-data results from `notebooks/01_data_audit.ipynb`, `notebooks/02_population_and_churn.ipynb`, or exploratory read-only checks (marked *exploratory*). Items marked *hypothesis* are not verified.
 
 ## 1. Unit of prediction and label
 
@@ -28,7 +28,7 @@ Status: **design, not implemented yet** (the feature tables and models are later
 
 - Features use only data on or before T; outcome transactions, later cancellations, and later listening are used for the label only.
 - The same user appears in many monthly cohorts, so a **random split would leak**; all splits are by time.
-- **Purge rule:** the label of month M is complete only about 30 days after the end of M, so when predicting month M with cutoff T the training months must be **M-2 or earlier**.
+- **Purge rule:** the label of month M is complete only about 30 days after the end of M, so when predicting month M with cutoff T the training months must be **M-2 or earlier**. Stated exactly (and implemented in `leakage_checks.check_purge`): a training month's last day plus 30 days must not be later than T. This is M-2 for every month except March, where a short February moves the cutoff to February 28 and January's last expirations are still unresolved, so training stops at M-3 (for March 2017: 2016-12).
 - A label rebuilt for month M and the official label for March 2017 treat early renewers differently (open question), so March 2017 is reported separately as an external check.
 - Cohorts with batch effects (for example 92,575 users expiring on 2015-04-30, 79.8% churn) are kept but reported with and without, and plan type is a feature.
 

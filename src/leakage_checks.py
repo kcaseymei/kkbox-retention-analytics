@@ -6,10 +6,14 @@ A feature table is leak-free when every value could have been computed on the cu
    truncated at the cutoff; any value that differs used information from after the cutoff.
 2. **Too good to be true** (`single_feature_auc`): a single feature that separates churners almost perfectly
    (area under the ROC curve above ``AUC_ALERT``) suggests the label leaked into the feature.
-3. **Time-ordered splits** (`check_purge`): training months must end at least two months before the
-   validation month, because the label of month M is complete only about 30 days after M ends.
+3. **Time-ordered splits** (`check_purge`): a training month's label must be complete on or before the
+   validation month's cutoff, i.e. the month's last day plus the 30-day renewal window must not be later
+   than the cutoff. This is "training months up to M-2" for every month except March (after a short February).
 4. **One row per user and month** (`check_unique_rows`).
 """
+import calendar
+from datetime import date, timedelta
+
 import numpy as np
 import pandas as pd
 
@@ -94,9 +98,22 @@ def _month_index(month):
     return year * 12 + number - 1
 
 
+def label_complete_date(month, renewal_days=30):
+    """First day on which every label of the month is known: the last day of the month plus the renewal window."""
+    year, number = (int(part) for part in month.split('-'))
+    return date(year, number, calendar.monthrange(year, number)[1]) + timedelta(days=renewal_days)
+
+
 def check_purge(train_months, validation_month):
-    """True when every training month is at least two months before the validation month."""
-    return all(_month_index(m) <= _month_index(validation_month) - 2 for m in train_months)
+    """True when every training label is complete on or before the cutoff of the validation month.
+
+    The cutoff is the last day of the month before ``validation_month``. For most months this means "training
+    months up to M-2"; before March it also excludes M-2 (its last expirations are renewed or lost only after
+    the cutoff when February is short).
+    """
+    year, number = (int(part) for part in validation_month.split('-'))
+    cutoff = date(year, number, 1) - timedelta(days=1)
+    return all(label_complete_date(m) <= cutoff for m in train_months)
 
 
 def check_unique_rows(frame, keys=('msno', 'target_month')):

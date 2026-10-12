@@ -67,6 +67,7 @@ def build_month(con, month):
     subscription = sf.subscription_features(con, 'tx_all', 'pop', cutoff)
     profile = sf.profile_features(con, 'members', 'pop', cutoff)
     table = (pop.merge(listening, on='msno').merge(subscription, on='msno').merge(profile, on='msno'))
+    assert len(table) == len(pop) and table['msno'].is_unique, f'{month}: users lost or duplicated in the merges'
     table.insert(1, 'target_month', month)
     table.insert(2, 'cutoff', cutoff)
     return table

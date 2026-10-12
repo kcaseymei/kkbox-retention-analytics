@@ -1,13 +1,13 @@
 # KKBox Retention Analytics — Master Plan
 
 Version: 1.0  
-Last updated: 2026-10-12  
+Last updated: 2026-10-13  
 Project owner: Casey Mei  
 Development project display name: `kkbox-analytics`  
 Repository: [`kcaseymei/kkbox-retention-analytics`](https://github.com/kcaseymei/kkbox-retention-analytics)  
 Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
 
-## At a glance (updated 2026-10-12)
+## At a glance (updated 2026-10-13)
 
 **Headline question:** Which behavioral signals appear before a KKBox subscriber churns, how early do they appear, and whom should be prioritized for intervention at a limited operational capacity?
 
@@ -17,19 +17,20 @@ Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
 | B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | 2, descriptive part of 3 | **Complete** (database, 9 SQL analyses, report) |
 | C. Behavioral features | `user_logs` to user × cutoff features (DuckDB first, Databricks/PySpark later) | 4 | **In progress** (features for 21 months built with DuckDB and leakage-checked; the Databricks/PySpark implementation is still planned) |
 | D. Serving and BI | Snowflake marts built with dbt (staging and mart models, data tests), Power BI dashboard (Tableau and a Streamlit app optional) | 5, 6, 7 | Planned |
-| E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | 8 | Planned |
+| E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | 8 | **Complete (first pass)**: rules, logistic regression and gradient boosting evaluated on three held-out months; model card written |
 | F. Recommendations and write-up | Intervention and experiment design, README, case study | 9, 10 | Planned |
 
 Public README uses five layers: Python/pandas/Parquet, PostgreSQL, Databricks/PySpark, Snowflake, Power BI/Tableau. Fabric is an optional extension. Details: Section 3 (simplified roadmap) and the 2026-10-02 decision log entries.
 
-**Current state (2026-10-12):** Stages A and B are complete and published on `main`; stage C is largely done.
+**Current state (2026-10-13):** Stages A, B and E (first pass) are complete; stage C is largely done.
 - **A:** full-data audit of both releases (`notebooks/01_data_audit.ipynb`, register DQ-001 to DQ-019); churn label rebuild (`src/churn_labels.py`, `notebooks/02_population_and_churn.ipynb`) reproducing the official February and March 2017 labels for 98.4% and 95.7% of shared users, with 25 monthly cohorts; prediction design (`docs/prediction_design.md`).
 - **B:** PostgreSQL database (`staging` and `analytics` schemas, about 9.7 GB) reconciled with the audit, a data model with key coverage (`docs/data_model.md`), and nine SQL analyses (`sql/analysis/`, `reports/sql_analysis.md`): label rates, plan mix, monthly churn, renewal gap, cohort retention, retention by first plan.
 - **C:** a feature table of 63 columns for 21 target months (2015-07 to 2017-03; 31 listening, 20 subscription, 7 profile features) built with DuckDB (`src/behavior_features.py`, `src/subscription_features.py`, `src/build_features.py`, `notebooks/03_behavioral_features.ipynb`) and four leakage checks passed (`src/leakage_checks.py`); 58 tests pass.
+- **E:** evaluation harness (`src/evaluation.py`), models and rules (`src/modeling.py`), time-ordered protocol with the purge rule (`src/run_experiments.py`), feature-family comparison (`src/run_ablation.py`), `reports/model_results.md`, `docs/model_card.md`, `notebooks/04_model_evaluation.ipynb`. Contacting 10% of the expiring users reaches 71.9% (2017-01) and 68.1% (2017-02) of the churners with gradient boosting, against 52.5% and 54.2% for the auto-renew rule and 10% at random; on the official March 2017 labels the model ties that rule at 10% (44.9% against 45.9%). Listening features add about 1 point on top of the subscription record; profile columns add no consistent gain.
 - **Findings so far (descriptive):** auto-renew off marks about 12% of users but about 64% of the churners of February 2017 (churn label rate 21.39% against 1.60%), so it is the baseline a model must beat; churn falls steadily with the number of transactions; listening days are weaker alone (single-feature AUC 0.63 against 0.77 for recent transactions); lead time hardly separates churners.
 - **Open:** how early renewers are labeled by the official file; why the official sample includes users outside the last-expiration rule; the cause of the batch cohorts and of the March 2016 spike (17.97%); why users with no listening have a low churn label rate; the `total_secs` threshold; whether the member profile (a 2017-11 snapshot) can be used safely.
 
-**Next action:** stage E: an evaluation harness (precision, recall, and lift at K = 5%, 10%, 20% by month and lead-time band; 2017-03 reported separately), then baselines (no auto-renew rule, logistic regression) and one stronger model (gradient boosting) with time-ordered splits and the purge rule, then a model card. Afterwards stage D (dbt models and tests, Snowflake, Power BI; optional Streamlit app) and the Databricks/PySpark implementation of the log features. Later: decide whether to hide or trim this plan on the public repository (reminder).
+**Next action:** (1) quantify the overlap of the two transaction releases (7,249 shared user-date keys) and decide on a rule; (2) understand the official March population and the early-renewer labeling, since the model's advantage over the auto-renew rule disappears there; (3) stage D (dbt models and tests, Snowflake, Power BI; optional Streamlit app) and the Databricks/PySpark implementation of the log features; (4) stage F (recommendations and an experiment design that separates risk from response to treatment). Later: decide whether to hide or trim this plan on the public repository (reminder).
 
 ## 1. Purpose and continuity
 
@@ -319,7 +320,7 @@ Each SQL model or mart must declare grain, keys, source dependencies, temporal c
 
 Status vocabulary: `Complete`, `In progress`, `Next`, `Planned`, `Blocked`, `Deferred`. Mark complete only when the completion gate has supporting evidence.
 
-| Phase | Status as of 2026-10-12 | Evidence / remaining work |
+| Phase | Status as of 2026-10-13 | Evidence / remaining work |
 |---|---|---|
 | 0 — Git and setup | Complete | Existing clone, ignore rules, charter, local commits; prior successful push |
 | Project continuity | Complete | Root master plan and AGENTS.md saved; Codex local project kkbox-analytics verified to point to the existing repository on 2026-09-25 |
@@ -330,7 +331,7 @@ Status vocabulary: `Complete`, `In progress`, `Next`, `Planned`, `Blocked`, `Def
 | 5 — Snowflake | Planned | Curated serving marts and reconciliation |
 | 6 — Power BI | Planned | Executive dashboard and validated measures |
 | 7 — Tableau | Planned | Complementary exploration/storytelling |
-| 8 — Predictive modeling | Next | Splits, leakage checks and features are ready; evaluation harness, baselines, stronger model, model card to do |
+| 8 — Predictive modeling | Complete (first pass) | Time-ordered protocol with purge rule, rules and two models evaluated at K = 5/10/20% on 2017-01, 2017-02 and 2017-03, ablation, calibration, model card (update 24); open: early-renewer labeling, March population mismatch, release overlap |
 | 9 — Recommendations / experiments | Planned | Evidence-backed proposals and experiment design |
 | 10 — Final portfolio | Planned | README, visuals, case study, reproducibility review |
 
@@ -795,5 +796,18 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Phase and status: Planning and bookkeeping; no new analysis.
 - Changes / artifacts: Rewrote "At a glance" (stage A complete, B complete, C largely done, current findings and open items, next action: stage E), and the progress tracker (phases 1 and 2 complete, 3 and 4 in progress, 8 next). Last commit before this update: 48e0741.
 - Decisions and rationale: Stage C stays "in progress" because the Databricks/PySpark implementation is part of its plan and not done; phase 3 stays "in progress" until `docs/metric_definitions.md` exists.
+- Next action: see "At a glance".
+- Commit or pull request: None yet.
+
+### 2026-10-13 (update 24) — Stage E: baselines, models, evaluation, and an independent review
+
+- Date: 2026-10-13
+- Phase and status: Stage E (prediction and prioritization), first pass complete.
+- Changes / artifacts: `src/evaluation.py` (precision, recall and lift at capacity K with a reproducible random tie-break, band metrics, AUC, Brier, calibration), `src/modeling.py` (feature matrix, three one-feature rules, logistic regression, gradient boosting with fixed settings), `src/run_experiments.py`, `src/run_ablation.py`, `src/model_report.py`, saved tables in `reports/model_results/`, `reports/model_results.md`, `reports/figures/recall_at_capacity.png`, `docs/model_card.md`, `notebooks/04_model_evaluation.ipynb` (reads the saved tables; not yet run by the owner), `scikit-learn` in `requirements.txt`; purge rule made date-based in `src/leakage_checks.py` and `docs/prediction_design.md`; 74 tests pass.
+- Independent review: a separate read-only subagent reviewed stages C and E (no direct use of data from after the cutoff found). Actions: purge rule corrected for March (training for 2017-03 stops at 2016-12 because January's last labels complete only on 2017-03-02); assertions added for row counts and the purge rule; a crash on users without history (2,524 official March users, churn label rate 54.7%) fixed (my first fix missed one rule; the external run failed once and was rerun); top-K size made robust to float rounding; a profile ablation run for the concern that missing profiles leak `has_member_profile`. Open from the review: overlap of the two transaction releases not quantified; docs now state that a window whose seconds are all invalid has `secs = 0` plus a flag.
+- Validation performed and results (full data; evaluation on every user of the month, training on a 100,000-user sample per month): validation months 2016-07 to 2016-12, gradient boosting mean recall at 10% capacity 71.6%, logistic regression 70.9%, rule "no auto-renew" 49.2%, "few transactions" 46.0%, "few listening days" 10.7%; AUC 0.899, 0.898, 0.809, 0.774, 0.589. Final test (rebuilt labels): 2017-01 recall at 10% 71.9% (gradient boosting), 71.1% (logistic), 52.5% (rule), AUC 0.885; 2017-02 68.1%, 67.7%, 54.2%, AUC 0.865; lift at 5% 9.8 and 9.7. External month 2017-03 (official labels, churn 8.99%): recall at 5/10/20%: gradient boosting 27.9/44.9/65.6, logistic 18.7/33.9/65.7, rule 22.9/45.9/58.4; AUC 0.810, 0.773, 0.733. Feature families (gradient boosting, recall at 10% Jan/Feb/Mar): all 71.9/68.1/44.9, no listening 70.8/66.9/52.0, subscription only 70.7/66.8/52.6, listening only 30.0/27.6/16.4. Profile columns: mean validation recall at 10% 71.6% with and without them. Permutation importance (2017-01): last payment method 0.093 AUC drop, then days since the last transaction 0.012. Calibration good in January and February (top decile 32.9% predicted against 32.4% observed; 30.2% against 26.9%), under-predicting in March (ninth decile 11.4% against 18.6%).
+- Findings versus hypotheses: Verified: the figures above. The 108,802 official March users outside the rebuilt population rule (churn 22.7%; they form the missing lead-time band) explain part of the weaker March result; the rest is attributed to the early-renewer labeling (hypothesis, not tested). Listening features add little to the subscription record but carry signal alone (hypothesis: they are largely redundant with recent transaction activity).
+- Decisions and rationale: settings fixed in advance (no tuning), so test months never choose anything; March reported separately; rules are the baselines to beat; no claim about response to an offer or about financial return.
+- Blockers / dependencies: None.
 - Next action: see "At a glance".
 - Commit or pull request: None yet.

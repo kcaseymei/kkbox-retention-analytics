@@ -28,9 +28,9 @@ The first stage, a **full-data audit of both data releases (about 444 million ro
 |---|---|---|
 | A. Audit and definitions | Audit of all source files, issue register, churn definition, label rebuild, monthly cohorts, cutoffs and feature windows | **Audit, label check and monthly cohorts complete**; prediction setup designed ([cutoffs, windows, splits](docs/prediction_design.md)) |
 | B. Relational analytics | PostgreSQL, metric definitions, cohort retention and renewal SQL | **Complete: database built and reconciled with the audit** (staging and analytics schemas, [data model](docs/data_model.md)); [SQL analyses](reports/sql_analysis.md): label rates, plan mix, monthly churn, renewal gap, cohort retention |
-| C. Behavioral features | `user_logs` to user-by-cutoff features (Databricks / PySpark) | Planned |
+| C. Behavioral features | `user_logs` to user-by-cutoff features | **Built with DuckDB** (63 columns, 21 months, four leakage checks passed, [notebook](notebooks/03_behavioral_features.ipynb)); Databricks / PySpark version planned |
 | D. Serving and BI | Snowflake marts and a Power BI dashboard | Planned |
-| E. Prediction | Baseline plus one stronger model with time-aware validation, top-k evaluation | Planned |
+| E. Prediction | Baseline plus one stronger model with time-aware validation, top-k evaluation | **Evaluated** on three held-out months ([results](reports/model_results.md), [model card](docs/model_card.md)) |
 | F. Recommendations | Intervention hypotheses, experiment design, final case study | Planned |
 
 Each tool is introduced only when the work needs it: Python and pandas for analysis, **DuckDB and Parquet** to audit the 392-million-row listening logs on a laptop, and later PostgreSQL for relational modeling, Databricks / PySpark for the large behavioral workload, Snowflake to serve curated marts, and Power BI for executive retention monitoring.
@@ -46,6 +46,17 @@ All figures are full-data results (every row), reproduced in [the audit notebook
 - **Behavior data has gaps and impossible values.** About 12% of labeled and test users have no listening log at all, and `total_secs` contains negative and absurdly large values (up to about 9.2 quadrillion seconds) in roughly 0.05% of rows, enough to ruin any sum or average.
 
 Nineteen data-quality items are tracked in the [issue register](reports/data_quality_issues.md) with evidence, risk, and a planned treatment. **No treatment has been applied yet**; source data is never modified.
+
+## What the models found
+
+Time-ordered validation (training stops before the month's labels are complete), capacity K = 5%, 10%, 20% of each month's expiring users; full results in [the report](reports/model_results.md) and [notebook 04](notebooks/04_model_evaluation.ipynb). Descriptive and predictive associations only.
+
+![Churners reached by capacity](reports/figures/recall_at_capacity.png)
+
+- **On the rebuilt labels the models beat the simple rule.** Contacting 10% of the expiring users reaches 71.9% (January 2017) and 68.1% (February 2017) of the churners with the gradient boosting list, against 52.5% and 54.2% for "last transaction has auto-renew off" and 10% for a random list.
+- **On the official March 2017 labels the advantage over that rule disappears at 10% capacity** (44.9% against 45.9%; better at 5% and 20%). 108,802 official users fall outside the rebuilt population rule, and early renewers are labeled differently, so the headline figures probably overstate performance under the official definition.
+- **Listening behavior adds little on top of the subscription record:** about 1 point of recall at 10% when added; alone it reaches about three times a random list. Logistic regression is within 1 point of gradient boosting on the rebuilt months.
+- **Limits:** three evaluation months with falling AUC (0.885, 0.865, 0.810); predicted risk is not the likelihood of responding to an offer; no effect of any action is claimed.
 
 ## What the SQL analysis found
 
@@ -78,7 +89,7 @@ The data belongs to the Kaggle competition and is **not included in this reposit
 
 ```bash
 pip install -r requirements.txt
-python -m unittest tests.test_audit_checks tests.test_audit_display tests.test_churn_labels
+python -m unittest discover -s tests
 ```
 
 ## Repository
@@ -89,11 +100,14 @@ python -m unittest tests.test_audit_checks tests.test_audit_display tests.test_c
 | `notebooks/02_population_and_churn.ipynb` | Label rebuild against the official labels, population differences, monthly cohorts and their swings |
 | `sql/postgres/`, `sql/quality/` | PostgreSQL schemas, staging load, typed analytics tables (`run_all.sh`), and a reconciliation script against the audit figures |
 | `src/audit_checks.py` | Reusable DuckDB checks: row counts, missingness, key uniqueness, ranges, date validity, coverage |
+| `src/behavior_features.py`, `src/subscription_features.py`, `src/build_features.py` | Features at a cutoff (listening, subscription history, profile) and the monthly feature table |
+| `src/leakage_checks.py` | Cutoff invariance, single-feature AUC alert, purge rule for time-ordered splits |
+| `src/evaluation.py`, `src/modeling.py`, `src/run_experiments.py`, `src/run_ablation.py` | Precision, recall and lift at a capacity K; rules and models; the experiment protocol and the feature-family comparison |
 | `src/churn_labels.py` | The official labeller rules rebuilt in DuckDB (population and 30-day renewal label), tested on the official examples |
 | `src/audit_display.py`, `src/csv_to_parquet.py` | Readable notebook output; verified CSV-to-Parquet conversion |
 | `tests/` | Unit tests for the checks and the display helper |
-| `reports/` | Audit report, the data-quality issue register, and the figures used above |
-| `docs/` | Data model (PostgreSQL schemas and key links), data dictionary, churn definition, prediction setup (cutoffs, feature windows, splits), notes on the official dataset description |
+| `reports/` | Audit report, the data-quality issue register, SQL analysis, model results (`model_results.md` and saved tables), and the figures used above |
+| `docs/` | Data model (PostgreSQL schemas and key links), data dictionary, churn definition, prediction setup (cutoffs, feature windows, splits), feature dictionary, model card, notes on the official dataset description |
 | `KKBOX_MASTER_PLAN.md` | Scope, roadmap, decisions, and a dated log of every milestone |
 
 ## Churn definition
