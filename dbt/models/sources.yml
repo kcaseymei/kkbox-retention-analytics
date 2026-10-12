@@ -1,0 +1,35 @@
+version: 2
+
+# Raw files are read in place (nothing is copied or changed). Every column is read as text; the staging
+# models give the columns their types.
+sources:
+  - name: raw
+    description: Kaggle source files and the outputs of the Python pipeline (notebooks 02 and 03).
+    tables:
+      - name: members
+        description: members_v3.csv, one row per member (a later snapshot of the members file).
+        meta:
+          external_location: "read_csv('{{ var('raw_dir') }}/members_v3.csv', all_varchar=true, header=true)"
+      - name: transactions_v1
+        description: transactions.csv, 2015-01-01 to 2017-02-28.
+        meta:
+          external_location: "read_csv('{{ var('raw_dir') }}/transactions.csv', all_varchar=true, header=true)"
+      - name: transactions_v2
+        description: transactions_v2.csv, March 2017 plus 361,187 earlier rows (a supplement to v1).
+        meta:
+          external_location: "read_csv('{{ var('raw_dir') }}/transactions_v2.csv', all_varchar=true, header=true)"
+      - name: train_v1
+        description: train.csv, official labels of the February 2017 expiration window (a training file).
+        meta:
+          external_location: "read_csv('{{ var('raw_dir') }}/train.csv', all_varchar=true, header=true)"
+      - name: train_v2
+        description: train_v2.csv, official labels of the March 2017 expiration window (a training file).
+        meta:
+          external_location: "read_csv('{{ var('raw_dir') }}/train_v2.csv', all_varchar=true, header=true)"
+      - name: monthly_features
+        description: >
+          One Parquet file per target month written by src/build_features.py (63 columns: listening,
+          subscription and profile features at the cutoff, plus the label). Rebuilt labels for 2015-07 to
+          2017-02, official labels for 2017-03.
+        meta:
+          external_location: "read_parquet('{{ var('processed_dir') }}/features/features_*.parquet')"

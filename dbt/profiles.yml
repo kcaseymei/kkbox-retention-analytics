@@ -1,0 +1,11 @@
+# Connection settings. No credentials are stored here: the local target is a DuckDB file, and the Snowflake
+# target (added in the last step of stage D) reads every secret from environment variables.
+kkbox:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('KKBOX_DBT_DB', '../data/processed/kkbox_dbt.duckdb') }}"
+      threads: 4
+      settings:
+        memory_limit: 8GB

@@ -227,3 +227,9 @@ data/processed/*
 # Local AI-assistant instruction files (never committed or pushed)
 CLAUDE.md
 AGENTS.md
+
+# dbt build artifacts
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml

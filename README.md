@@ -29,7 +29,7 @@ The first stage, a **full-data audit of both data releases (about 444 million ro
 | A. Audit and definitions | Audit of all source files, issue register, churn definition, label rebuild, monthly cohorts, cutoffs and feature windows | **Audit, label check and monthly cohorts complete**; prediction setup designed ([cutoffs, windows, splits](docs/prediction_design.md)) |
 | B. Relational analytics | PostgreSQL, metric definitions, cohort retention and renewal SQL | **Complete: database built and reconciled with the audit** (staging and analytics schemas, [data model](docs/data_model.md)); [SQL analyses](reports/sql_analysis.md): label rates, plan mix, monthly churn, renewal gap, cohort retention |
 | C. Behavioral features | `user_logs` to user-by-cutoff features | **Built with DuckDB** (63 columns, 21 months, four leakage checks passed, [notebook](notebooks/03_behavioral_features.ipynb)); Databricks / PySpark version planned |
-| D. Serving and BI | Snowflake marts and a Power BI dashboard | Planned |
+| D. Serving and BI | Snowflake marts built with dbt, and a Power BI dashboard | **dbt project built and tested locally** on DuckDB (3 staging and 3 mart models, 38 data tests, [details](dbt/README.md)); Snowflake and the dashboard planned |
 | E. Prediction | Baseline plus one stronger model with time-aware validation, top-k evaluation | **Evaluated** on three held-out months ([results](reports/model_results.md), [model card](docs/model_card.md)) |
 | F. Recommendations | Intervention hypotheses, experiment design, final case study | Planned |
 
@@ -100,6 +100,7 @@ python -m unittest discover -s tests
 | `notebooks/02_population_and_churn.ipynb` | Label rebuild against the official labels, population differences, monthly cohorts and their swings |
 | `sql/postgres/`, `sql/quality/` | PostgreSQL schemas, staging load, typed analytics tables (`run_all.sh`), and a reconciliation script against the audit figures |
 | `src/audit_checks.py` | Reusable DuckDB checks: row counts, missingness, key uniqueness, ranges, date validity, coverage |
+| `dbt/` | dbt project: staging and mart models with data tests (keys, relationships, audit reconciliation, leakage controls) |
 | `src/behavior_features.py`, `src/subscription_features.py`, `src/build_features.py` | Features at a cutoff (listening, subscription history, profile) and the monthly feature table |
 | `src/leakage_checks.py` | Cutoff invariance, single-feature AUC alert, purge rule for time-ordered splits |
 | `src/evaluation.py`, `src/modeling.py`, `src/run_experiments.py`, `src/run_ablation.py` | Precision, recall and lift at a capacity K; rules and models; the experiment protocol and the feature-family comparison |

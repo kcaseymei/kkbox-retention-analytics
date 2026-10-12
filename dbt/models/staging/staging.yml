@@ -1,0 +1,68 @@
+version: 2
+
+models:
+  - name: stg_members
+    description: Typed members file, one row per member. Values are cast, not cleaned.
+    columns:
+      - name: msno
+        description: Anonymized user identifier.
+        tests: [unique, not_null]
+      - name: gender
+        description: male or female; missing for about 65% of members (kept as null).
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['male', 'female']
+  - name: stg_official_labels
+    description: Official label files stacked with a release column (training labels, not the competition test set).
+    columns:
+      - name: msno
+        tests: [not_null]
+      - name: release
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['v1', 'v2']
+      - name: is_churn
+        description: 1 = churn, 0 = renewal (official definition).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+  - name: stg_transactions
+    description: >
+      Both transaction releases stacked with a release column, one row per record. No de-duplication: the
+      releases overlap on 7,249 user-date keys (open item).
+    columns:
+      - name: msno
+        tests:
+          - not_null
+          # Not every user has a member profile (about 82% of the users in transactions do): a warning, not an error.
+          - relationships:
+              arguments:
+                to: ref('stg_members')
+                field: msno
+              config:
+                severity: warn
+      - name: release
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['v1', 'v2']
+      - name: is_cancel
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+      - name: is_auto_renew
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+      - name: transaction_date
+        tests: [not_null]
+      - name: membership_expire_date
+        tests: [not_null]

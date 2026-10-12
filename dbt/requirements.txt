@@ -1,0 +1,6 @@
+# Separate environment for dbt (kept apart from the project environment of the notebooks):
+#   conda create -n kkbox-dbt python=3.12 -y
+#   source /opt/anaconda3/bin/activate kkbox-dbt
+#   pip install -r dbt/requirements.txt
+dbt-core==1.12.5
+dbt-duckdb==1.11.0

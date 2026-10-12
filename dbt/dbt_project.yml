@@ -1,0 +1,23 @@
+# dbt project for the KKBox retention marts. Run from this directory (see dbt/README.md).
+name: kkbox_retention
+version: '1.0.0'
+profile: kkbox
+model-paths: ['models']
+test-paths: ['tests']
+target-path: target
+clean-targets: ['target', 'dbt_packages']
+
+flags:
+  send_anonymous_usage_stats: false
+
+vars:
+  # Locations of the source files, relative to this directory (override with --vars for another machine)
+  raw_dir: ../data/raw
+  processed_dir: ../data/processed
+
+models:
+  kkbox_retention:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

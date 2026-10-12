@@ -1,0 +1,63 @@
+version: 2
+
+models:
+  - name: mart_user_month_features
+    description: >
+      One row per user and target month with the label and 57 model features (listening, subscription history,
+      profile) computed at the cutoff, the last day of the previous month. Consumers: model training and
+      evaluation (src/modeling.py), the monthly churn mart, dashboards.
+    columns:
+      - name: msno
+        tests:
+          - not_null
+          # Users without a member profile exist by design: a warning, not an error.
+          - relationships:
+              arguments:
+                to: ref('stg_members')
+                field: msno
+              config:
+                severity: warn
+      - name: target_month
+        tests: [not_null]
+      - name: cutoff
+        description: Prediction cutoff as YYYYMMDD; every feature uses data on or before it.
+        tests: [not_null]
+      - name: is_churn
+        description: 1 = no renewal within 30 days of the last expiration.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+      - name: label_source
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['rebuilt', 'official']
+      - name: split_role
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['training', 'validation', 'test', 'external']
+      - name: lead_time_band
+        description: Days from the cutoff to the last expiration.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['1-7', '8-14', '15-21', '22-31', 'outside 1-31']
+  - name: mart_monthly_churn
+    description: >
+      One row per target month: users, churners and the churn label rate within the labeled population,
+      plus the churn label rate by auto-renew status of the last transaction.
+    columns:
+      - name: target_month
+        tests: [unique, not_null]
+      - name: users
+        tests: [not_null]
+  - name: mart_cohort_retention
+    description: >
+      Retention by cohort month (first transaction), first plan group, and month offset 0 to 6. Retention is the
+      share with an active subscription at the end of the offset month.
+    columns:
+      - name: retention_pct
+        tests: [not_null]

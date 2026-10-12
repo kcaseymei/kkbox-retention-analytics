@@ -16,7 +16,7 @@ Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
 | A. Audit and definitions | Full-dataset audit (v1 + v2), issue register, churn definition, cutoff and feature windows | 1, and the definitions part of 3 | **Complete** (audit, label rebuild, monthly cohorts, prediction design; open labeling questions listed below) |
 | B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | 2, descriptive part of 3 | **Complete** (database, 9 SQL analyses, report) |
 | C. Behavioral features | `user_logs` to user × cutoff features (DuckDB first, Databricks/PySpark later) | 4 | **In progress** (features for 21 months built with DuckDB and leakage-checked; the Databricks/PySpark implementation is still planned) |
-| D. Serving and BI | Snowflake marts built with dbt (staging and mart models, data tests), Power BI dashboard (Tableau and a Streamlit app optional) | 5, 6, 7 | Planned |
+| D. Serving and BI | Snowflake marts built with dbt (staging and mart models, data tests), Power BI dashboard (Tableau and a Streamlit app optional) | 5, 6, 7 | **In progress**: dbt project built and tested locally on DuckDB (update 27); Snowflake, Power BI next |
 | E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | 8 | **Complete (first pass)**: rules, logistic regression and gradient boosting evaluated on three held-out months; model card written |
 | F. Recommendations and write-up | Intervention and experiment design, README, case study | 9, 10 | Planned |
 
@@ -104,6 +104,7 @@ The eight analytical questions above collapse into four: (1) what churn looks li
 - Phase 3 definitions (cutoff, feature windows, eligible population) are fixed during stage A so stage C does not need rework. **Cutoff** = the as-of date for prediction: data before it builds features, data after it only determines the outcome label.
 - Tableau and Fabric are optional extensions after the main line is complete.
 - Optional extension (added 2026-10-10): a **Streamlit app** with an interactive churn view (monthly churn, cohort retention by plan, and a capacity slider K = 5/10/20% showing how many churners a random list or a model list reaches). It reads only small **aggregated** tables exported from the marts (no `msno`, no raw rows), so it can be hosted publicly. Built after stage E, when model results exist; dropped first if time is short.
+- Stretch goal (added 2026-10-12): a **lead-time experiment** (how early before expiration the signals become usable, measured by moving the prediction cutoff back by 7 to 180 days with the population and labels held fixed); draft design in `docs/lead_time_experiment_design.md`, not approved or implemented. Done only if time remains, dropped first together with the Streamlit app.
 - Stage A completion standard: core-table audit and issue register done, `train_v2` label window verified against transactions; remaining items are recorded as known unresolved, not expanded.
 - Cohort retention over time may require reconstructing labels per month from transactions. This depends on the unverified assumption that the supplied labels cover only one or two expiration months; verify in stage A.
 - Each stage needs one demonstrable artifact (see the 2026-10-02 update entry).
@@ -326,7 +327,7 @@ Status vocabulary: `Complete`, `In progress`, `Next`, `Planned`, `Blocked`, `Def
 | Project continuity | Complete | Root master plan and AGENTS.md saved; Codex local project kkbox-analytics verified to point to the existing repository on 2026-09-25 |
 | 1 — Data audit | Complete | Full-data audit of both releases (notebook 01, reports, register DQ-001 to DQ-019); notebook 02 was run from a fresh kernel; a restart-and-run-all of notebook 01 is not recorded in this log |
 | 2 — PostgreSQL / pgAdmin | Complete | Staging and analytics schemas, repeatable load, reconciliation to the audit, logical data model (no foreign keys by design), nine SQL analyses (updates 15-17) |
-| 3 — Definitions / product analytics | In progress | Churn definition, label rebuild, monthly cohorts, renewal-gap and retention analyses done; `docs/metric_definitions.md` not yet written; early-renewer labeling open |
+| 3 — Definitions / product analytics | Complete | Churn definition, label rebuild, monthly cohorts, renewal-gap and retention analyses, `docs/metric_definitions.md` (update 26); early-renewal labeling is a supported hypothesis with about 6,500 February disagreements unexplained |
 | 4 — Databricks | In progress | Log features built locally with DuckDB (21 months, leakage-checked); Databricks/PySpark implementation with a comparison to the local result still planned |
 | 5 — Snowflake | Planned | Curated serving marts and reconciliation |
 | 6 — Power BI | Planned | Executive dashboard and validated measures |
@@ -822,4 +823,27 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Decisions and rationale: option A: keep the models trained on rebuilt labels and report both label sets side by side; option B (rebuild all months with the official-style rule and retrain, about an hour, not verifiable for March) is deferred.
 - Blockers / dependencies: None.
 - Next action: see "At a glance".
+- Commit or pull request: None yet.
+
+### 2026-10-12 (update 26) — Metric definitions written; lead-time experiment recorded as a stretch goal
+
+- Date: 2026-10-12
+- Phase and status: Phase 3 (definitions and descriptive analysis) complete; stage D next.
+- Changes / artifacts: `docs/metric_definitions.md` (population, label, descriptive SQL, feature, and evaluation metrics, each with grain, denominator, caveat, and where it is computed); stretch goal recorded in the extension list (draft `docs/lead_time_experiment_design.md`, not approved or implemented).
+- Validation performed and results: All figures quoted in the metric definitions were taken from the existing reports and notebooks (879,537 and 993,531 users for February 2017, 992,931 and 970,960 official users, 88.57% and 88.79% inside the rebuilt rule, 87.97% 30-day plans, 3.95% against 6.39% label rate, 4.45% in the simplified SQL); no new analysis.
+- Decisions and rationale: the label rate is defined as a rate within the labeled population, never as platform churn; the simplified SQL churn is for shape only.
+- Blockers / dependencies: dbt is not installed (stage D); installing it changes the Python environment and needs the owner's approval.
+- Next action: stage D, starting with a dbt project verified locally before any Snowflake use.
+- Commit or pull request: None yet.
+
+### 2026-10-12 (update 27) — Stage D started: dbt project built and tested locally
+
+- Date: 2026-10-12
+- Phase and status: Stage D (serving and BI) in progress: the dbt project works on DuckDB; Snowflake and the dashboard are next.
+- Changes / artifacts: `dbt/` (project file, `profiles.yml` without credentials, sources, three staging models `stg_members`, `stg_official_labels`, `stg_transactions`, three marts `mart_user_month_features`, `mart_monthly_churn`, `mart_cohort_retention`, YAML tests (29 generic) and 9 singular tests (38 in all), `README.md`, `requirements.txt`); `.gitignore` for dbt build artifacts. dbt-core 1.12.5 and dbt-duckdb 1.11.0 were installed by the owner in a separate conda environment (`kkbox-dbt`, Python 3.12), apart from the project environment.
+- Validation performed and results (full data): `dbt run` builds the 6 models in 18 seconds; `dbt test`: 36 of 38 tests pass and 2 warn by design (transactions and the feature mart have no member profile for 2,783,896 transaction rows and 1,965,406 user-months; the project keeps them). The tests reconcile source row counts with the audit (6,769,473 members; 992,931 and 970,960 official labels; 21,547,746 and 1,431,009 transactions), the churn counts in the official files (63,471 and 87,330), the February 2017 population and churn label rate (879,537; 3.95%), and check the leakage controls (cutoff equals the last day of the previous month, no negative "days since" values, one row per user and month). The marts reproduce earlier results: churn label rate 21.39% for auto-renew off against 1.60% for on (February 2017), 8.99% for the official March 2017 file, and retention by first plan (70.6% after one month for 30-day plans, 99.7% over 30 days, 10.8% under 30 days), identical to the PostgreSQL analysis.
+- Findings versus hypotheses: Verified: the figures above. The monthly mart shows that the churn label rate of users with auto-renew off varies from 19.6% to 45.2% across months (not investigated).
+- Decisions and rationale: dbt only transforms; the log scans and feature building stay in `src/` (DuckDB, later PySpark), the marts are built on the finished feature files; the relationship tests warn instead of failing because unmatched users are kept; the Snowflake target will read secrets from environment variables and no credentials are stored in the repository.
+- Blockers / dependencies: A Snowflake account (created by the owner; start the trial only when ready, it is time-limited) is needed for the last step; Power BI Desktop is Windows-only.
+- Next action: Snowflake target and load (when the owner has an account), the dashboard; or stage F in the meantime.
 - Commit or pull request: None yet.
