@@ -1,30 +1,35 @@
 # KKBox Retention Analytics — Master Plan
 
 Version: 1.0  
-Last updated: 2026-10-05  
+Last updated: 2026-10-12  
 Project owner: Casey Mei  
 Development project display name: `kkbox-analytics`  
 Repository: [`kcaseymei/kkbox-retention-analytics`](https://github.com/kcaseymei/kkbox-retention-analytics)  
 Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
 
-## At a glance (updated 2026-10-05)
+## At a glance (updated 2026-10-12)
 
 **Headline question:** Which behavioral signals appear before a KKBox subscriber churns, how early do they appear, and whom should be prioritized for intervention at a limited operational capacity?
 
 | Stage | Work | Detailed phases (Section 6) | Status |
 |---|---|---|---|
-| A. Audit and definitions | Full-dataset audit (v1 + v2), issue register, churn definition, cutoff and feature windows | 1, and the definitions part of 3 | **In progress** |
+| A. Audit and definitions | Full-dataset audit (v1 + v2), issue register, churn definition, cutoff and feature windows | 1, and the definitions part of 3 | **Complete** (audit, label rebuild, monthly cohorts, prediction design; open labeling questions listed below) |
 | B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | 2, descriptive part of 3 | **Complete** (database, 9 SQL analyses, report) |
-| C. Behavioral features | `user_logs` to user × cutoff features (DuckDB first, Databricks/PySpark later) | 4 | **In progress** (features for all months built and leakage-checked) |
+| C. Behavioral features | `user_logs` to user × cutoff features (DuckDB first, Databricks/PySpark later) | 4 | **In progress** (features for 21 months built with DuckDB and leakage-checked; the Databricks/PySpark implementation is still planned) |
 | D. Serving and BI | Snowflake marts built with dbt (staging and mart models, data tests), Power BI dashboard (Tableau and a Streamlit app optional) | 5, 6, 7 | Planned |
 | E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | 8 | Planned |
 | F. Recommendations and write-up | Intervention and experiment design, README, case study | 9, 10 | Planned |
 
 Public README uses five layers: Python/pandas/Parquet, PostgreSQL, Databricks/PySpark, Snowflake, Power BI/Tableau. Fabric is an optional extension. Details: Section 3 (simplified roadmap) and the 2026-10-02 decision log entries.
 
-**Current state:** Phase 1 (data audit) is complete and published on `main` (README, `notebooks/01_data_audit.ipynb`, reports, register DQ-001 to DQ-019, reusable checks, tests). The label rebuild (`src/churn_labels.py`, `notebooks/02_population_and_churn.ipynb`) reproduces the official February and March 2017 labels for 98.4% and 95.7% of shared users and builds 25 monthly cohorts; it is published with a chart in the README. Open: how early renewers are labeled, why the official sample includes users outside the last-expiration rule, the cause of the batch cohorts, and the `total_secs` treatment.
+**Current state (2026-10-12):** Stages A and B are complete and published on `main`; stage C is largely done.
+- **A:** full-data audit of both releases (`notebooks/01_data_audit.ipynb`, register DQ-001 to DQ-019); churn label rebuild (`src/churn_labels.py`, `notebooks/02_population_and_churn.ipynb`) reproducing the official February and March 2017 labels for 98.4% and 95.7% of shared users, with 25 monthly cohorts; prediction design (`docs/prediction_design.md`).
+- **B:** PostgreSQL database (`staging` and `analytics` schemas, about 9.7 GB) reconciled with the audit, a data model with key coverage (`docs/data_model.md`), and nine SQL analyses (`sql/analysis/`, `reports/sql_analysis.md`): label rates, plan mix, monthly churn, renewal gap, cohort retention, retention by first plan.
+- **C:** a feature table of 63 columns for 21 target months (2015-07 to 2017-03; 31 listening, 20 subscription, 7 profile features) built with DuckDB (`src/behavior_features.py`, `src/subscription_features.py`, `src/build_features.py`, `notebooks/03_behavioral_features.ipynb`) and four leakage checks passed (`src/leakage_checks.py`); 58 tests pass.
+- **Findings so far (descriptive):** auto-renew off marks about 12% of users but about 64% of the churners of February 2017 (churn label rate 21.39% against 1.60%), so it is the baseline a model must beat; churn falls steadily with the number of transactions; listening days are weaker alone (single-feature AUC 0.63 against 0.77 for recent transactions); lead time hardly separates churners.
+- **Open:** how early renewers are labeled by the official file; why the official sample includes users outside the last-expiration rule; the cause of the batch cohorts and of the March 2016 spike (17.97%); why users with no listening have a low churn label rate; the `total_secs` threshold; whether the member profile (a 2017-11 snapshot) can be used safely.
 
-**Next action:** build the relational layer (stage B: PostgreSQL schema, metric definitions, cohort retention SQL) and the behavioral features (stage C) following `docs/prediction_design.md`, updating the README status table after each block. Later: decide whether to hide or trim this plan on the public repository (reminder). Open checks: how early renewers are labeled; whether users without logs are the users without member profiles.
+**Next action:** stage E: an evaluation harness (precision, recall, and lift at K = 5%, 10%, 20% by month and lead-time band; 2017-03 reported separately), then baselines (no auto-renew rule, logistic regression) and one stronger model (gradient boosting) with time-ordered splits and the purge rule, then a model card. Afterwards stage D (dbt models and tests, Snowflake, Power BI; optional Streamlit app) and the Databricks/PySpark implementation of the log features. Later: decide whether to hide or trim this plan on the public repository (reminder).
 
 ## 1. Purpose and continuity
 
@@ -314,18 +319,18 @@ Each SQL model or mart must declare grain, keys, source dependencies, temporal c
 
 Status vocabulary: `Complete`, `In progress`, `Next`, `Planned`, `Blocked`, `Deferred`. Mark complete only when the completion gate has supporting evidence.
 
-| Phase | Status as of 2026-09-28 | Evidence / remaining work |
+| Phase | Status as of 2026-10-12 | Evidence / remaining work |
 |---|---|---|
 | 0 — Git and setup | Complete | Existing clone, ignore rules, charter, local commits; prior successful push |
 | Project continuity | Complete | Root master plan and AGENTS.md saved; Codex local project kkbox-analytics verified to point to the existing repository on 2026-09-25 |
-| 1 — Data audit | In progress | User-run full-data checks saved in notebook; notebook reorganized for review. Test-user audit and transaction coverage remain pending; clean-kernel rerun not yet verified. |
-| 2 — PostgreSQL / pgAdmin | Planned | Schema, ingestion, relationships, SQL checks |
-| 3 — Definitions / product analytics | Planned | Population/time contracts, cohorts and descriptive analysis |
-| 4 — Databricks | Planned | Audit-driven scale decision; Bronze/Silver/Gold |
+| 1 — Data audit | Complete | Full-data audit of both releases (notebook 01, reports, register DQ-001 to DQ-019); notebook 02 was run from a fresh kernel; a restart-and-run-all of notebook 01 is not recorded in this log |
+| 2 — PostgreSQL / pgAdmin | Complete | Staging and analytics schemas, repeatable load, reconciliation to the audit, logical data model (no foreign keys by design), nine SQL analyses (updates 15-17) |
+| 3 — Definitions / product analytics | In progress | Churn definition, label rebuild, monthly cohorts, renewal-gap and retention analyses done; `docs/metric_definitions.md` not yet written; early-renewer labeling open |
+| 4 — Databricks | In progress | Log features built locally with DuckDB (21 months, leakage-checked); Databricks/PySpark implementation with a comparison to the local result still planned |
 | 5 — Snowflake | Planned | Curated serving marts and reconciliation |
 | 6 — Power BI | Planned | Executive dashboard and validated measures |
 | 7 — Tableau | Planned | Complementary exploration/storytelling |
-| 8 — Predictive modeling | Planned | Baselines, time-aware validation, leakage controls |
+| 8 — Predictive modeling | Next | Splits, leakage checks and features are ready; evaluation harness, baselines, stronger model, model card to do |
 | 9 — Recommendations / experiments | Planned | Evidence-backed proposals and experiment design |
 | 10 — Final portfolio | Planned | README, visuals, case study, reproducibility review |
 
@@ -782,4 +787,13 @@ Do not automatically mark planned tasks complete or describe an unexecuted noteb
 - Decisions and rationale: ties in transaction order are broken deterministically; sums are compared with a relative tolerance; invariance is run on two cutoffs (2017-02, 2016-03) because each run takes minutes.
 - Blockers / dependencies: The external drive must be connected to rebuild the features.
 - Next action: owner runs notebook section 8; then examine the no-listening group, and start stage D (dbt models and tests on the feature table) or stage E (baselines).
+- Commit or pull request: None yet.
+
+### 2026-10-12 (update 23) — Master plan brought up to date
+
+- Date: 2026-10-12
+- Phase and status: Planning and bookkeeping; no new analysis.
+- Changes / artifacts: Rewrote "At a glance" (stage A complete, B complete, C largely done, current findings and open items, next action: stage E), and the progress tracker (phases 1 and 2 complete, 3 and 4 in progress, 8 next). Last commit before this update: 48e0741.
+- Decisions and rationale: Stage C stays "in progress" because the Databricks/PySpark implementation is part of its plan and not done; phase 3 stays "in progress" until `docs/metric_definitions.md` exists.
+- Next action: see "At a glance".
 - Commit or pull request: None yet.
