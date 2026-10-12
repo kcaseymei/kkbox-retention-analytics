@@ -5,9 +5,11 @@ models:
     description: >
       One row per user and target month with the label and 57 model features (listening, subscription history,
       profile) computed at the cutoff, the last day of the previous month. Consumers: model training and
-      evaluation (src/modeling.py), the monthly churn mart, dashboards.
+      evaluation (src/modeling.py), the monthly churn mart, dashboards. Column definitions follow
+      docs/feature_dictionary.md.
     columns:
       - name: msno
+        description: 'Anonymized user identifier (44 characters).'
         tests:
           - not_null
           # Users without a member profile exist by design: a warning, not an error.
@@ -18,33 +20,154 @@ models:
               config:
                 severity: warn
       - name: target_month
-        tests: [not_null]
+        description: 'Month in which the last subscription expires and whose renewal is judged (YYYY-MM).'
+        tests:
+          - not_null
       - name: cutoff
-        description: Prediction cutoff as YYYYMMDD; every feature uses data on or before it.
-        tests: [not_null]
+        description: 'Prediction cutoff as YYYYMMDD, the last day of the month before the target month; every feature uses data on or before it.'
+        tests:
+          - not_null
       - name: is_churn
-        description: 1 = no renewal within 30 days of the last expiration.
+        description: '1 = no renewal within 30 days of the last expiration, 0 = renewal.'
         tests:
           - not_null
           - accepted_values:
               arguments:
                 values: [0, 1]
       - name: label_source
+        description: 'rebuilt = computed from the transactions with the rules of the official labeller (2015-07 to 2017-02); official = the official train_v2 file (2017-03).'
         tests:
           - accepted_values:
               arguments:
                 values: ['rebuilt', 'official']
-      - name: split_role
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['training', 'validation', 'test', 'external']
+      - name: has_log_90
+        description: 'True if the user has at least one listening log in the last 90 days.'
+      - name: no_log_90_flag
+        description: 'The opposite of has_log_90, kept as an explicit flag: missing listening is not zero listening.'
+      - name: has_invalid_secs_90
+        description: 'True if any log in the last 90 days has implausible total_secs (outside 0 to 86,400 per day, DQ-001).'
+      - name: days_since_last_log
+        description: 'Days from the last listening log (within the last 90 days) to the cutoff. Missing if the user has no listening log in the last 90 days.'
+      - name: active_days_7
+        description: 'Number of days with a listening log in the last 7 days (the window includes the cutoff day). Missing if the user has no listening log in the last 90 days.'
+      - name: plays_7
+        description: 'Total plays in the last 7 days (the window includes the cutoff day), all completion bands summed. Missing if the user has no listening log in the last 90 days.'
+      - name: secs_7
+        description: 'Total listening seconds in the last 7 days (the window includes the cutoff day); days with implausible total_secs are ignored (0 if all are invalid, with the flag set). Missing if the user has no listening log in the last 90 days.'
+      - name: unique_songs_7
+        description: 'Sum over days of the daily count of unique songs in the last 7 days (the window includes the cutoff day) (a song played on two days counts twice). Missing if the user has no listening log in the last 90 days.'
+      - name: completed_share_7
+        description: 'Plays that reached at least 98.5% of the song divided by all plays in the last 7 days (the window includes the cutoff day). Missing if there are no plays.'
+      - name: active_days_14
+        description: 'Number of days with a listening log in the last 14 days (the window includes the cutoff day). Missing if the user has no listening log in the last 90 days.'
+      - name: plays_14
+        description: 'Total plays in the last 14 days (the window includes the cutoff day), all completion bands summed. Missing if the user has no listening log in the last 90 days.'
+      - name: secs_14
+        description: 'Total listening seconds in the last 14 days (the window includes the cutoff day); days with implausible total_secs are ignored (0 if all are invalid, with the flag set). Missing if the user has no listening log in the last 90 days.'
+      - name: unique_songs_14
+        description: 'Sum over days of the daily count of unique songs in the last 14 days (the window includes the cutoff day) (a song played on two days counts twice). Missing if the user has no listening log in the last 90 days.'
+      - name: completed_share_14
+        description: 'Plays that reached at least 98.5% of the song divided by all plays in the last 14 days (the window includes the cutoff day). Missing if there are no plays.'
+      - name: active_days_30
+        description: 'Number of days with a listening log in the last 30 days (the window includes the cutoff day). Missing if the user has no listening log in the last 90 days.'
+      - name: plays_30
+        description: 'Total plays in the last 30 days (the window includes the cutoff day), all completion bands summed. Missing if the user has no listening log in the last 90 days.'
+      - name: secs_30
+        description: 'Total listening seconds in the last 30 days (the window includes the cutoff day); days with implausible total_secs are ignored (0 if all are invalid, with the flag set). Missing if the user has no listening log in the last 90 days.'
+      - name: unique_songs_30
+        description: 'Sum over days of the daily count of unique songs in the last 30 days (the window includes the cutoff day) (a song played on two days counts twice). Missing if the user has no listening log in the last 90 days.'
+      - name: completed_share_30
+        description: 'Plays that reached at least 98.5% of the song divided by all plays in the last 30 days (the window includes the cutoff day). Missing if there are no plays.'
+      - name: active_days_60
+        description: 'Number of days with a listening log in the last 60 days (the window includes the cutoff day). Missing if the user has no listening log in the last 90 days.'
+      - name: plays_60
+        description: 'Total plays in the last 60 days (the window includes the cutoff day), all completion bands summed. Missing if the user has no listening log in the last 90 days.'
+      - name: secs_60
+        description: 'Total listening seconds in the last 60 days (the window includes the cutoff day); days with implausible total_secs are ignored (0 if all are invalid, with the flag set). Missing if the user has no listening log in the last 90 days.'
+      - name: unique_songs_60
+        description: 'Sum over days of the daily count of unique songs in the last 60 days (the window includes the cutoff day) (a song played on two days counts twice). Missing if the user has no listening log in the last 90 days.'
+      - name: completed_share_60
+        description: 'Plays that reached at least 98.5% of the song divided by all plays in the last 60 days (the window includes the cutoff day). Missing if there are no plays.'
+      - name: active_days_90
+        description: 'Number of days with a listening log in the last 90 days (the window includes the cutoff day). Missing if the user has no listening log in the last 90 days.'
+      - name: plays_90
+        description: 'Total plays in the last 90 days (the window includes the cutoff day), all completion bands summed. Missing if the user has no listening log in the last 90 days.'
+      - name: secs_90
+        description: 'Total listening seconds in the last 90 days (the window includes the cutoff day); days with implausible total_secs are ignored (0 if all are invalid, with the flag set). Missing if the user has no listening log in the last 90 days.'
+      - name: unique_songs_90
+        description: 'Sum over days of the daily count of unique songs in the last 90 days (the window includes the cutoff day) (a song played on two days counts twice). Missing if the user has no listening log in the last 90 days.'
+      - name: completed_share_90
+        description: 'Plays that reached at least 98.5% of the song divided by all plays in the last 90 days (the window includes the cutoff day). Missing if there are no plays.'
+      - name: trend_days_7_vs_prior_23
+        description: 'Daily rate of active days in the last 7 days minus the rate over the 23 days before. Missing if the user has no listening log in the last 90 days.'
+      - name: trend_days_30_vs_prior_30
+        description: 'Daily rate of active days in the last 30 days minus the rate over the 30 days before. Missing if the user has no listening log in the last 90 days.'
+      - name: has_history
+        description: 'True if the user has any transaction on or before the cutoff (since 2015-01-01).'
+      - name: tenure_days
+        description: 'Days from the first transaction in the data to the cutoff. Left-censored: the data starts on 2015-01-01.'
+      - name: first_tx_in_first_data_month
+        description: 'True if the first transaction is in January 2015, so tenure may be truncated.'
+      - name: n_transactions
+        description: 'Number of transactions (including cancellation rows) up to the cutoff.'
+      - name: n_cancellations
+        description: 'Number of cancellation rows up to the cutoff.'
+      - name: n_transactions_90
+        description: 'Number of transactions in the last 90 days.'
+      - name: n_cancellations_90
+        description: 'Number of cancellation rows in the last 90 days.'
+      - name: days_since_last_transaction
+        description: 'Days from the latest transaction to the cutoff.'
+      - name: days_to_expiration
+        description: 'Days from the cutoff to the expiration of the last row (the lead time); negative if already expired.'
+      - name: last_plan_days
+        description: 'Plan length in days of the last row.'
+      - name: last_list_price
+        description: 'List price (New Taiwan Dollar) of the last row.'
+      - name: last_amount_paid
+        description: 'Amount paid (New Taiwan Dollar) of the last row.'
+      - name: last_auto_renew
+        description: 'Auto-renew flag of the last row (1 on, 0 off).'
+      - name: last_payment_method
+        description: 'Payment method code of the last row (category; meaning unknown).'
+      - name: last_is_cancel
+        description: 'True if the last row is a cancellation.'
+      - name: last_paid_zero
+        description: 'True if the last payment was zero.'
+      - name: last_paid_below_list
+        description: 'True if the last payment was below the list price.'
+      - name: zero_paid_share
+        description: 'Share of non-cancellation transactions with a zero payment.'
+      - name: auto_renew_share
+        description: 'Share of non-cancellation transactions with auto-renew on.'
+      - name: n_plan_changes
+        description: 'Number of changes of plan length between consecutive non-cancellation transactions.'
+      - name: has_member_profile
+        description: 'Diagnostic only, not a model feature: whether a member row exists. Not shown to be knowable at the cutoff.'
+      - name: city
+        description: 'City code (category; meaning unknown). Missing if the user has no member profile.'
+      - name: registered_via
+        description: 'Registration channel code (category; meaning unknown); a negative code is treated as missing downstream.'
+      - name: gender
+        description: 'male, female, or unknown (missing is kept as unknown in the models).'
+      - name: age
+        description: 'Supplied age when it lies between 1 and 100, otherwise missing.'
+      - name: age_valid
+        description: 'True when the age is within 1 to 100.'
+      - name: registration_days
+        description: 'Days from the registration date to the cutoff; missing if the registration is after the cutoff (the members file is a later snapshot).'
       - name: lead_time_band
-        description: Days from the cutoff to the last expiration.
+        description: 'Days from the cutoff to the last expiration, in bands.'
         tests:
           - accepted_values:
               arguments:
                 values: ['1-7', '8-14', '15-21', '22-31', 'outside 1-31']
+      - name: split_role
+        description: 'Role in the evaluation protocol: training (2015-07 to 2016-06), validation (2016-07 to 2016-12), test (2017-01, 2017-02), external (2017-03, official labels).'
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['training', 'validation', 'test', 'external']
   - name: mart_monthly_churn
     description: >
       One row per target month: users, churners and the churn label rate within the labeled population,
