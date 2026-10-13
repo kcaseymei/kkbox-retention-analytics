@@ -1,384 +1,130 @@
 # KKBox Retention Analytics — Master Plan
 
-Version: 1.0  
 Last updated: 2026-10-13  
 Project owner: Casey Mei  
-Development project display name: `kkbox-analytics`  
 Repository: [`kcaseymei/kkbox-retention-analytics`](https://github.com/kcaseymei/kkbox-retention-analytics)  
 Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
+
+This is the project's source of truth for scope, status, decisions, and the next action. It was condensed on 2026-10-13: the long dated entries with every validation figure are in the Git history of this file; the figures that matter live in the reports and notebooks linked below.
 
 ## At a glance (updated 2026-10-13)
 
 **Headline question:** Which behavioral signals appear before a KKBox subscriber churns, how early do they appear, and whom should be prioritized for intervention at a limited operational capacity?
 
-| Stage | Work | Detailed phases (Section 6) | Status |
+| Stage | Work | Status |
+|---|---|---|
+| A. Audit and definitions | Full-dataset audit (v1 + v2), issue register, churn definition, label rebuild, monthly cohorts, prediction design | **Complete** |
+| B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | **Complete** (database, 9 SQL analyses, report) |
+| C. Behavioral features | `user_logs` to user × cutoff features | **Built with DuckDB** (21 months, leakage-checked); Databricks/PySpark version planned |
+| D. Serving and BI | Snowflake marts built with dbt, Power BI dashboard (Tableau, Streamlit optional) | **dbt project built and tested locally** on DuckDB; Snowflake and the dashboard next |
+| E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | **Complete (first pass)** |
+| F. Recommendations and write-up | Intervention and experiment design, case study | Planned |
+
+**Where the project stands**
+- **Data:** two releases, about 444 million rows audited; 19 data-quality items in `reports/data_quality_issues.md`; churn labels rebuilt from transactions (98.4% agreement with the official February 2017 labels on shared users), reliable up to 2017-02 because renewals after 2017-03-31 are invisible.
+- **Relational layer:** PostgreSQL (`staging` and `analytics`), reconciled with the audit; nine SQL analyses; data model in `docs/data_model.md`.
+- **Features:** 63-column monthly feature table (31 listening, 20 subscription, 7 profile) for 21 target months, four leakage checks passed; definitions in `docs/feature_dictionary.md`.
+- **Models:** on held-out months 2017-01 and 2017-02, contacting 10% of the expiring users reaches 71.9% and 68.1% of the churners with gradient boosting, against 52.5% and 54.2% for the rule "last transaction has auto-renew off" and 10% at random. With the official labels the lead over that rule shrinks (60.8% against 52.6% in February; a tie at 10% capacity in March 2017, where 11.2% of the official users fall outside the population the model was built for). Listening features add about 1 point on top of the subscription record. Details: `reports/model_results.md`, `docs/model_card.md`.
+- **dbt:** 6 models and 38 data tests (36 pass, 2 warn by design: users without a member profile are kept, not dropped).
+
+**Open questions:** early-renewal labeling in the official files (supported hypothesis, agreement 99.25% in February, about 6,500 disagreements unexplained); why the official sample includes users outside the last-expiration rule; the cause of the batch cohorts and of the March 2016 spike (17.97%); why users with no listening have a low churn label rate; the `total_secs` threshold; whether the two transaction releases overlap harmfully (7,249 shared user-date keys); whether the member profile (a 2017-11 snapshot) is safe to use.
+
+**Next action:** (1) stage F: recommendations and an experiment design that separates risk from response to treatment; (2) quantify the transaction overlap and decide the label target (rebuilt or official-style); (3) stage D: Snowflake target and dashboard (needs an account the owner creates), then the Databricks/PySpark version of the log features. Optional, dropped first if time is short: a Streamlit app on aggregated tables, and the lead-time experiment (`docs/lead_time_experiment_design.md`, draft, not approved).
+
+## 1. Purpose and positioning
+
+Build an **end-to-end subscription retention case study**, from raw data to a defensible business decision. Kaggle provides the data (WSDM – KKBox's Churn Prediction Challenge, https://www.kaggle.com/competitions/kkbox-churn-prediction-challenge); the portfolio adds subscriber behavior, retention measurement, analytical engineering, prediction, and intervention design. It should show the ability to clarify an ambiguous problem, test data quality, define trustworthy metrics, build reproducible transformations, and propose testable actions; model performance is one component.
+
+Historical associations do not establish causal impact. No retention lift or financial return is claimed without observed experimental evidence; any scenario estimate states its assumptions.
+
+**Questions (collapsed from eight to four):** (1) what churn looks like and who is higher risk; (2) which transaction and listening signals precede churn; (3) how early the signals appear and what top-k prioritization achieves; (4) which interventions to test and how to measure them.
+
+**Roadmap:** six public stages A–F over ten internal phases (Section 5). The README presents five layers: Python/pandas/Parquet, PostgreSQL, Databricks/PySpark, Snowflake, Power BI/Tableau; Fabric is an optional extension. A platform without a demonstrable artifact is not listed in the README or resume. Cutoff and feature windows are fixed in stage A; the cutoff is the as-of date (data before it builds features, data after it only decides the label).
+
+**Optional extensions** (dropped first if time is short): a Streamlit app with a capacity slider on aggregated tables only (no user identifiers); a lead-time experiment that moves the prediction cutoff back by 7 to 180 days with population and labels held fixed.
+
+## 2. Working principles
+
+- Introduce each tool when a concrete requirement needs it; start locally, add cloud platforms after the data and analytical contracts are understood.
+- Define population, time windows, table grain, and metric denominators before publishing comparisons (`docs/metric_definitions.md`).
+- Preserve raw inputs; record each quality issue as finding → decision → treatment → validation.
+- Label full-data checks versus samples, documented claims versus verified findings, hypotheses versus findings, and planned work versus implemented work.
+- Keep notebooks reproducible, reused logic in `src/` with tests, SQL readable and versioned.
+- Keep raw and processed data, credentials, and machine-specific configuration out of Git.
+
+## 3. Architecture and tool responsibilities
+
+| Layer | Responsibility | Output | State |
 |---|---|---|---|
-| A. Audit and definitions | Full-dataset audit (v1 + v2), issue register, churn definition, cutoff and feature windows | 1, and the definitions part of 3 | **Complete** (audit, label rebuild, monthly cohorts, prediction design; open labeling questions listed below) |
-| B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | 2, descriptive part of 3 | **Complete** (database, 9 SQL analyses, report) |
-| C. Behavioral features | `user_logs` to user × cutoff features (DuckDB first, Databricks/PySpark later) | 4 | **In progress** (features for 21 months built with DuckDB and leakage-checked; the Databricks/PySpark implementation is still planned) |
-| D. Serving and BI | Snowflake marts built with dbt (staging and mart models, data tests), Power BI dashboard (Tableau and a Streamlit app optional) | 5, 6, 7 | **In progress**: dbt project built and tested locally on DuckDB (update 27); Snowflake, Power BI next |
-| E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | 8 | **Complete (first pass)**: rules, logistic regression and gradient boosting evaluated on three held-out months; model card written |
-| F. Recommendations and write-up | Intervention and experiment design, README, case study | 9, 10 | Planned |
+| Python / pandas / DuckDB / Parquet | Audit the 410-million-row listening logs on a laptop, labels, features, models | Audit notebooks, `src/` modules, tests | Done |
+| PostgreSQL (+ pgAdmin client) | Relational storage and SQL analysis of members, labels, transactions | DDL, load scripts, reconciliation, SQL analyses | Done |
+| dbt | Staging and mart models with data tests, documentation, lineage | `dbt/` project | Local (DuckDB) |
+| Databricks / PySpark / Delta | Distributed version of the log aggregation, compared with the local result | Notebooks, Gold aggregates | Planned |
+| Snowflake | Cloud serving layer for the dbt marts | Marts, reconciliation | Planned |
+| Power BI / Tableau | Executive monitoring; complementary exploration | Dashboard and measure documentation | Planned |
+| Predictive modeling | Risk prioritization using only information available at the cutoff | Evaluation, model card | Done (first pass) |
+| Recommendations | Intervention hypotheses and experiment specification | Memo and experiment plan | Planned |
 
-Public README uses five layers: Python/pandas/Parquet, PostgreSQL, Databricks/PySpark, Snowflake, Power BI/Tableau. Fabric is an optional extension. Details: Section 3 (simplified roadmap) and the 2026-10-02 decision log entries.
+Systems exchange data through explicit curated exports with row counts and date coverage recorded. No real-time orchestration or production deployment is implied.
 
-**Current state (2026-10-13):** Stages A, B and E (first pass) are complete; stage C is largely done.
-- **A:** full-data audit of both releases (`notebooks/01_data_audit.ipynb`, register DQ-001 to DQ-019); churn label rebuild (`src/churn_labels.py`, `notebooks/02_population_and_churn.ipynb`) reproducing the official February and March 2017 labels for 98.4% and 95.7% of shared users, with 25 monthly cohorts; prediction design (`docs/prediction_design.md`).
-- **B:** PostgreSQL database (`staging` and `analytics` schemas, about 9.7 GB) reconciled with the audit, a data model with key coverage (`docs/data_model.md`), and nine SQL analyses (`sql/analysis/`, `reports/sql_analysis.md`): label rates, plan mix, monthly churn, renewal gap, cohort retention, retention by first plan.
-- **C:** a feature table of 63 columns for 21 target months (2015-07 to 2017-03; 31 listening, 20 subscription, 7 profile features) built with DuckDB (`src/behavior_features.py`, `src/subscription_features.py`, `src/build_features.py`, `notebooks/03_behavioral_features.ipynb`) and four leakage checks passed (`src/leakage_checks.py`); 58 tests pass.
-- **E:** evaluation harness (`src/evaluation.py`), models and rules (`src/modeling.py`), time-ordered protocol with the purge rule (`src/run_experiments.py`), feature-family comparison (`src/run_ablation.py`), `reports/model_results.md`, `docs/model_card.md`, `notebooks/04_model_evaluation.ipynb`. Contacting 10% of the expiring users reaches 71.9% (2017-01) and 68.1% (2017-02) of the churners with gradient boosting, against 52.5% and 54.2% for the auto-renew rule and 10% at random; on the official March 2017 labels the model ties that rule at 10% (44.9% against 45.9%). Listening features add about 1 point on top of the subscription record; profile columns add no consistent gain.
-- **Findings so far (descriptive):** auto-renew off marks about 12% of users but about 64% of the churners of February 2017 (churn label rate 21.39% against 1.60%), so it is the baseline a model must beat; churn falls steadily with the number of transactions; listening days are weaker alone (single-feature AUC 0.63 against 0.77 for recent transactions); lead time hardly separates churners.
-- **Open:** early-renewal labeling in the official files (supported hypothesis, agreement 99.25% in February, about 6,500 disagreements unexplained); why the official sample includes users outside the last-expiration rule; the cause of the batch cohorts and of the March 2016 spike (17.97%); why users with no listening have a low churn label rate; the `total_secs` threshold; whether the member profile (a 2017-11 snapshot) can be used safely.
+## 4. Phases and completion gates
 
-**Next action:** (1) quantify the overlap of the two transaction releases (7,249 shared user-date keys) and decide on a rule; (2) decide the label target (rebuilt or official-style, option B of update 25) and re-evaluate; the report now shows both label sets; (3) stage D (dbt models and tests, Snowflake, Power BI; optional Streamlit app) and the Databricks/PySpark implementation of the log features; (4) stage F (recommendations and an experiment design that separates risk from response to treatment). Later: decide whether to hide or trim this plan on the public repository (reminder).
+A phase is complete only when its gate has supporting evidence.
 
-## 1. Purpose and continuity
-
-This document is the source of truth for project scope, architecture, sequencing, decisions, and progress. Read it at the start of future work and update it when a phase, definition, or material decision changes. It expands the original project charter (`PROJECT_PLAN.md`, removed on 2026-10-06 and kept in the Git history); this document is the only plan.
-
-The local Git repository is the development workspace. The Codex project should point to that existing directory, rather than create another copy of the repository. ChatGPT project discussions can support learning and ideation; any accepted decisions must be recorded here. A copied or uploaded version is a dated snapshot, not an independently maintained master.
-
-## 2. Source, repository, and established setup
-
-- Original competition: **WSDM – KKBox's Churn Prediction Challenge**.
-- Official Kaggle URL: https://www.kaggle.com/competitions/kkbox-churn-prediction-challenge
-- GitHub repository: https://github.com/kcaseymei/kkbox-retention-analytics
-- Existing local clone: the repository directory under the owner's `workspace/projects` folder (absolute path omitted).
-- Prior planning conversation: `kkbox-github`, conversation ID `6ab5692c-9088-83e8-b5de-88b93c8a9ecf`.
-
-### Completed setup
-
-The user and prior conversation report that Homebrew, Git, GitHub CLI authentication, repository creation, cloning under `workspace/projects`, staging, committing, and pushing were completed successfully. The first project charter, `PROJECT_PLAN.md`, was created and pushed (later removed; see the decision log).
-
-Direct local inspection on 2026-09-25 confirmed the repository directory, initial charter, README, and existing `data/`, `notebooks/`, `reports/`, `sql/`, and `src/` directories. The `.gitignore` contains:
-
-```gitignore
-data/raw/*
-data/processed/*
-```
-
-Recent local history includes `5fe904c` (initial commit), `807cbff` (data-directory ignore configuration), and `503d237` (initial project plan). A successful push was shown in the prior conversation, and the user subsequently confirmed pushing the project plan. Current remote synchronization and authentication have not been re-tested for this documentation task.
-
-Do not treat setup completion as evidence that the data audit, SQL models, cloud pipelines, dashboards, or predictive model are complete.
-
-## 3. Project positioning
-
-Build an **end-to-end subscription retention and modern analytics stack case study**, from raw data to a defensible business decision. Kaggle provides the dataset and original prediction setting; the portfolio expands the scope to subscriber behavior, retention measurement, analytical engineering, visualization, prediction, and intervention design.
-
-The portfolio should demonstrate the ability to clarify an ambiguous business problem, evaluate data quality, define trustworthy metrics, design reproducible transformations, communicate evidence, and propose testable retention actions. Model performance is one component of the case study.
-
-### Primary business question
-
-> What subscriber behaviors and transaction patterns are associated with churn, when do those signals emerge, and how can KKBox use them to improve retention?
-
-### Analytical questions
-
-1. What does churn look like across the eligible subscriber base and observable time periods?
-2. Which transaction and subscription patterns are associated with churn, including renewal timing, cancellation indicators, auto-renewal, plan duration, and payment behavior where supported by the data?
-3. How does listening engagement differ between retained and churned subscribers?
-4. How early before a prediction or renewal cutoff do behavioral signals become visible?
-5. Which cohorts and subscriber segments have elevated churn or weaker retention?
-6. Which associations remain useful after accounting for differences in tenure, plan, and other observed characteristics?
-7. Which customers could be prioritized at a realistic intervention capacity, and with how much lead time?
-8. Which retention actions should be tested, and how would incremental impact be measured?
-
-Historical associations do not establish causal impact. Do not claim a retention lift or financial return without observed experimental evidence; any scenario estimate must disclose its assumptions.
-
-### Simplified public roadmap (adopted 2026-10-02)
-
-The 10 phases below remain the detailed internal plan. The recruiter-facing story and the working priority use six stages and one headline question.
-
-> **Headline question:** Which behavioral signals appear before a KKBox subscriber churns, how early do they appear, and whom should be prioritized for intervention at a limited operational capacity?
-
-The eight analytical questions above collapse into four: (1) what churn looks like and who is higher risk; (2) which transaction and listening signals precede churn, including a robustness check after controlling for tenure and plan; (3) how early the signals appear and what top-k prioritization achieves; (4) which interventions to test and how to measure them.
-
-| Stage | Work | Questions | Platforms | Time cap |
-|---|---|---|---|---|
-| A. Audit and definitions | Core-table audit, issue register, churn definition, **cutoff and feature windows**, verify the label window of `train_v2` | Foundation | Python / pandas / Parquet | 2 weeks |
-| B. Relational analytics | Load, metric definitions, cohort retention and renewal SQL | 1, 2 | PostgreSQL | 2 weeks |
-| C. Behavioral features | `user_logs` aggregated to user × cutoff features | 2, 3 | Databricks / PySpark | 2 weeks |
-| D. Serving and BI | Three marts and one dashboard | 1, 2 | Snowflake, Power BI | 2 weeks |
-| E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | 3 | Python | 1 week |
-| F. Recommendations and write-up | Intervention and experiment design, README, case study | 4 | GitHub | 1 week |
-
-- Phase 3 definitions (cutoff, feature windows, eligible population) are fixed during stage A so stage C does not need rework. **Cutoff** = the as-of date for prediction: data before it builds features, data after it only determines the outcome label.
-- Tableau and Fabric are optional extensions after the main line is complete.
-- Optional extension (added 2026-10-10): a **Streamlit app** with an interactive churn view (monthly churn, cohort retention by plan, and a capacity slider K = 5/10/20% showing how many churners a random list or a model list reaches). It reads only small **aggregated** tables exported from the marts (no `msno`, no raw rows), so it can be hosted publicly. Built after stage E, when model results exist; dropped first if time is short.
-- Stretch goal (added 2026-10-12): a **lead-time experiment** (how early before expiration the signals become usable, measured by moving the prediction cutoff back by 7 to 180 days with the population and labels held fixed); draft design in `docs/lead_time_experiment_design.md`, not approved or implemented. Done only if time remains, dropped first together with the Streamlit app.
-- Stage A completion standard: core-table audit and issue register done, `train_v2` label window verified against transactions; remaining items are recorded as known unresolved, not expanded.
-- Cohort retention over time may require reconstructing labels per month from transactions. This depends on the unverified assumption that the supplied labels cover only one or two expiration months; verify in stage A.
-- Each stage needs one demonstrable artifact (see the 2026-10-02 update entry).
-
-## 4. Learning and implementation principles
-
-- Introduce each tool when a concrete project requirement makes it useful. Start locally; add cloud platforms after the data and analytical contracts are understood.
-- Use the actual KKBox project to learn database concepts, distributed processing, warehouse design, and business intelligence.
-- Keep a small end-to-end slice working before scaling it. Profile runtime and memory before moving a workload.
-- Define population, time windows, table grain, and metric denominators before publishing comparisons.
-- Preserve raw inputs. Record each quality issue as finding → decision → treatment → validation.
-- Distinguish full-data checks from sample checks, hypotheses from findings, and planned deliverables from implemented ones.
-- Make notebook execution reproducible, extract reused logic into `src/`, and keep SQL readable and versioned.
-- Keep raw/processed datasets, credentials, personal machine configuration, and large generated artifacts out of Git.
-- Use Git continuously: inspect changes, stage deliberately, commit coherent work, and push at appropriate milestones.
-
-## 5. Target architecture and tool responsibilities
-
-This is the planned architecture, not an assertion that these systems are deployed.
-
-```text
-KKBox raw data + file/version manifest
-                 |
-          Python / pandas audit
-                 |
-       Population and time contracts
-                 |
-       +---------+-------------------------+
-       |                                   |
-Members / transactions / labels       Large user_logs workload
-       |                                   |
-PostgreSQL + pgAdmin                  Databricks + PySpark
-Relational storage and SQL           Delta Bronze → Silver → Gold
-       |                                   |
-       +---------- curated exports --------+
-                          |
-                       Snowflake
-              Conformed analytics marts
-                          |
-       +------------------+------------------+
-       |                  |                  |
-    Power BI           Tableau        Point-in-time feature data
-Executive monitoring   Exploration    Predictive modeling
-       |                  |                  |
-       +------------------+------------------+
-                          |
-           Recommendations and experiment design
-                          |
-              GitHub README and case study
-```
-
-| Tool/layer | Responsibility and rationale | Intended output |
+| Phase | Deliverables | Completion gate |
 |---|---|---|
-| Python / pandas / Jupyter | Inspect files, quantify quality issues, explore patterns, and prototype transparent transformations. Use bounded reads or chunks where needed. | Reproducible audit, data dictionary, findings and treatment log |
-| PostgreSQL | Learn relational fundamentals and maintain local structured storage and analytical models: database, schema, tables, keys, joins, indexes, views, and queries. | Versioned DDL, load steps, quality checks, SQL analyses |
-| pgAdmin | Inspect and manage PostgreSQL and run or review SQL. It is the database client, not another storage layer. | Documented local database workflow |
-| Product/retention analytics | Establish business definitions and describe cohorts, engagement, subscription behavior, and intervention windows. | Metric contracts and evidence-backed descriptive findings |
-| Databricks / PySpark / Delta | Process the large behavioral `user_logs` workload and learn distributed transformations and layered data quality. Audit the actual input grain before calling it individual event data; source logs may already summarize activity by user and date. | Bronze source-preserving tables, Silver validated records, Gold behavioral aggregates |
-| Snowflake | Serve as the cloud analytics warehouse and shared serving layer for curated structured data and behavioral aggregates. Avoid duplicating every raw transformation from the other systems. | Documented marts, refresh dependencies, reconciled totals |
-| Power BI | Executive retention monitoring with clear KPI definitions, cohort context, segment filters, and actionable views. | Executive dashboard and measure documentation |
-| Tableau | Complementary exploration and storytelling, such as cohort patterns, behavioral trajectories, and segment comparisons. | Focused exploratory workbook/story rather than a duplicate dashboard |
-| Predictive modeling | Add risk prioritization after descriptive/product analysis, using only information available at prediction time. | Baseline, evaluated model, calibration and prioritization analysis |
-| Business recommendations | Translate validated patterns into intervention hypotheses and measurable experiments. | Prioritized actions and experiment specifications |
-| GitHub | Explain the problem, methods, architecture, evidence, limitations, and reproducibility. | Polished README and final case study |
+| 0 Git and setup | Repository, ignore rules | Pushed |
+| 1 Data audit | Audit notebook, data dictionary, issue register | Full-data checks reproduced; issues recorded with treatments |
+| 2 PostgreSQL | DDL, repeatable load, data model, SQL checks | Counts reconciled to the source; join strategy without unexplained row multiplication |
+| 3 Definitions and descriptive analysis | Churn definition, metric definitions, cohorts, SQL analyses | Stable definitions and traceable descriptive conclusions |
+| 4 Databricks / PySpark | Bronze/Silver/Gold notebooks, quality checks, aggregates | Outputs reconciled with the local result; repeatable runs |
+| 5 Snowflake | dbt marts, documentation, reconciliation checks, runbook | Consistent definitions and a reproducible load path |
+| 6 Power BI | Executive dashboard with documented measures | Measures reconcile to validated analyses |
+| 7 Tableau | One focused exploratory workbook (not a duplicate dashboard) | Views add analytical value beyond Power BI |
+| 8 Predictive modeling | Time-ordered evaluation, baselines, a stronger model, calibration, model card | Documented holdout protocol and an honest assessment of operational usefulness |
+| 9 Recommendations and experiments | Prioritized proposals; randomized experiment design (eligibility, randomization unit, outcome, guardrails, sample size); risk kept separate from response to treatment | No claim of a live experiment |
+| 10 Final portfolio | README, visuals, case study, reproducibility review | A reader can reproduce the main results |
 
-The public README presents a compressed five-layer version of this architecture; see the 2026-10-02 decision log entry.
+## 5. Progress tracker (as of 2026-10-13)
 
-The planned exchange between systems is explicit, versioned curated exports or supported connectors, with row counts, schemas, date coverage, and checksums or batch identifiers recorded. Select the actual transfer method during implementation. Do not imply real-time orchestration or production deployment unless implemented and verified.
-
-## 6. Phases, deliverables, and completion gates
-
-### Phase 0 — Git and project setup: complete
-
-Established the repository, development folder structure, ignore rules, initial charter, and commit/push workflow. Continue using these practices in all phases.
-
-### Phase 1 — Python/pandas data audit: in progress
-
-Create `notebooks/01_data_audit.ipynb` and build a reproducible inventory before cleaning:
-
-- File names, source versions, sizes, compression formats, and available date coverage.
-- Row and column counts, schemas, types, candidate keys, observed grain, and relationships.
-- Missing values, categorical distributions, date parsing, numeric ranges, and invalid values.
-- Exact duplicates versus legitimate repeated transactions; member coverage and unmatched joins.
-- Transaction chronology and anomalies, including expiration before transaction date, zero plan days, cancellation and renewal patterns, and same-day records.
-- Behavioral log coverage, duplicate user/date combinations, metric validity, and possible aggregation grain.
-- Runtime and memory observations to choose sampling, chunking, or later distributed processing.
-
-Earlier exploratory concerns include missing `gender`, unusual `bd`, expiration/transaction inconsistencies, zero plan days, and same-day transaction duplicates. These are **items to re-check**, not accepted audit findings or reasons to delete records automatically.
-
-Outputs: the notebook, `reports/data_audit.md`, `docs/data_dictionary.md`, and an issue/treatment register. Completion requires reproducible execution, clearly labeled sample versus full-data evidence, and documented unresolved issues.
-
-### Phase 2 — PostgreSQL and pgAdmin
-
-Define staging and analytical schemas; load audited structured data; practice DDL, data types, candidate keys, foreign-key coverage, indexes, joins, CTEs, window functions, views, and query inspection. Keep large logs sampled or aggregated locally if full ingestion is impractical.
-
-Proposed entities are members, transactions, behavioral aggregates, and churn labels. Treat natural keys and transaction identifiers as hypotheses until audited. Do not silently drop unmatched records to force referential integrity.
-
-Outputs: DDL, repeatable ingestion, a relationship diagram, SQL checks, and local setup instructions. Completion requires reconciliation to source counts and a documented join strategy without unexplained row multiplication.
-
-### Phase 3 — Churn definition and product/retention analysis
-
-Read the official competition definition and record the exact data version, label rules, eligible population, observation window, prediction cutoff, outcome window, renewal/grace rules, and handling of censoring. The supplied Scala labeller has now been inspected: renewal gap < 30 means retained; gap >= 30 means churn. See `docs/churn_definition.md` for the exact rules. Local data/version and window alignment remain unverified.
-
-Distinguish Kaggle-provided labels from any independently derived business churn metric. An observed label rate in a labeled sample is not automatically the full subscriber-base churn rate. Cancellation flags alone should not be assumed to equal churn.
-
-Analyze retention/cohorts, tenure, renewal and payment patterns, engagement levels and changes, segment differences, and possible intervention lead time. Record denominator and coverage limitations for each result.
-
-Outputs: `docs/metric_definitions.md`, versioned SQL, analysis notebooks, and an initial findings brief. Completion requires stable definitions and traceable descriptive conclusions before model development.
-
-### Phase 4 — Databricks, PySpark, and Delta
-
-Use the actual size and processing needs of `user_logs` to motivate distributed processing. Bronze preserves source records and provenance; Silver validates types, grain, and approved treatments; Gold aggregates behavior at documented user/day or user/cutoff grains.
-
-Candidate features include active days, listening volume, recency, and engagement changes over explicitly bounded windows, subject to available fields. Validate a comparable sample against the pandas/local implementation and document partitioning, execution time, and rerun behavior.
-
-Outputs: exported/versioned notebooks or scripts, Delta layer definitions, quality checks, and Gold aggregates. Completion requires reconciled outputs and repeatable runs. Service configuration and cost assumptions remain to be selected.
-
-### Phase 5 — Snowflake analytics warehouse
-
-Load curated structured data and Gold behavioral aggregates into a conformed warehouse. Proposed marts include subscriber snapshots, retention cohorts, engagement trends, and transaction/renewal patterns. Define grain, keys, owner/source, refresh cadence, and time-window semantics for each.
-
-Separate a KPI-serving snapshot from a training/prediction snapshot where their eligibility or timing differs. Reconcile warehouse measures to validated source analyses.
-
-Outputs: warehouse DDL/transforms, mart documentation, reconciliation checks, and a runbook. Completion requires consistent definitions and a reproducible load path for BI.
-
-**dbt (added 2026-10-10).** Build the marts as a dbt project (dbt-core): staging models (typed views over the loaded tables) and mart models (monthly churn cohorts, user-by-month features, cohort retention; two or three marts, not more), with documented grain and keys. Develop and test the models first on the local PostgreSQL or DuckDB layer, then run them on Snowflake, so the limited Snowflake trial is used only for the final run and demonstration. Data tests: `unique` and `not_null` on keys (for example `msno` in members), `accepted_values` for `is_churn` (0, 1), `relationships` from transactions and labels to members with severity `warn` (only 81.95% and 88.84% of users match; records are not dropped), and custom tests that reconcile row counts and key audit figures with the audit and that no feature uses data after its cutoff (leakage test). Connection settings (`profiles.yml`) live outside the repository; no credentials are committed. Do not open the Snowflake trial before the stage C feature tables exist, and do not claim the dbt work in the README or resume until models and passing tests are in the repository.
-
-### Phase 6 — Power BI executive dashboard
-
-Design for a retention stakeholder: churn/renewal measures with explicit populations, eligible subscriber counts, cohorts, segment patterns, engagement signals, and historical context. Revenue measures are included only if transaction semantics support them; do not equate a payment field with recurring revenue without justification.
-
-Outputs: dashboard file or supported project format, screenshots, measures, filters, data freshness label, and a concise user guide. Completion requires reconciliation of totals and verification of filter behavior. Confirm the available authoring environment before beginning; the user's current machine is a Mac.
-
-### Phase 7 — Tableau exploration and storytelling
-
-Use the same validated marts for deeper exploration: cohort retention, pre-churn engagement trajectories, subscription segments, and lead-time comparisons. Choose views that add analytical value alongside Power BI.
-
-Outputs: workbook or supported project format, screenshots, and an evidence-backed narrative. Completion requires consistency with canonical metric definitions and successful interaction checks.
-
-### Phase 8 — Predictive churn modeling
-
-Start after descriptive analysis and point-in-time features are reliable. Establish a simple baseline, then a justified stronger model. Use chronological validation when data coverage permits, document member overlap and leakage controls, and keep future outcomes out of feature windows.
-
-Evaluate discrimination, probability quality, calibration, and precision/recall or lift at a realistic intervention capacity. Report class prevalence and compare against baseline. Do not choose accuracy alone for an imbalanced problem. Interpret predictive associations without describing them as causal drivers.
-
-Outputs: reproducible training/evaluation, model comparison, feature definitions, leakage checks, and a model card. Completion requires a documented holdout protocol and an honest assessment of operational usefulness.
-
-### Phase 9 — Recommendations and experimentation
-
-For each proposed action, document the target segment, evidence, intervention hypothesis, timing, expected mechanism, feasibility, and limitations. Candidate ideas such as renewal reminders, payment recovery, or engagement messaging remain hypotheses until supported.
-
-Design a randomized experiment with eligibility, randomization unit, treatment/control, primary outcome, observation period, guardrails, contamination considerations, and a sample-size plan based on stated assumptions. Separate predicted churn risk from likelihood of responding to treatment.
-
-Outputs: prioritized recommendation memo and experiment plan. Completion does not require inventing or claiming a live experiment.
-
-### Phase 10 — Final GitHub portfolio
-
-Polish the README around business problem → data and definitions → architecture → methods → validated findings → dashboards → modeling → recommendations → limitations. Include reproducibility steps, selected visuals, artifact links, and an honest description of implemented versus conceptual components.
-
-Outputs: finished README, case study, architecture diagram, dashboard previews, and interview talking points. Completion requires functioning links, consistent numbers, documented environments, and a clean review for secrets or unintended datasets.
-
-## 7. Planned repository structure
-
-This is a target structure. Create files when their phase needs them; names beyond the exact next notebook may evolve. Existing directories and user files must be preserved.
-
-```text
-kkbox-retention-analytics/
-├── README.md
-├── KKBOX_MASTER_PLAN.md
-├── AGENTS.md                         # local only, git-ignored (with CLAUDE.md)
-├── .gitignore
-├── requirements.txt                  # Or the dependency format selected later
-├── data/
-│   ├── raw/                          # Ignored; immutable source inputs
-│   └── processed/                    # Ignored; reproducible derived data
-├── docs/
-│   ├── data_dictionary.md
-│   ├── metric_definitions.md
-│   ├── architecture.md
-│   └── runbook.md
-├── notebooks/
-│   ├── 01_data_audit.ipynb            # Exact next deliverable
-│   ├── 02_population_and_churn.ipynb
-│   ├── 03_cohort_retention.ipynb
-│   ├── 04_transaction_analysis.ipynb
-│   ├── 05_engagement_analysis.ipynb
-│   └── 06_churn_modeling.ipynb
-├── sql/
-│   ├── postgres/                     # DDL, staging, loading, relational models
-│   ├── quality/                      # Keys, coverage, dates, reconciliation
-│   ├── analysis/                     # Cohorts, transactions, engagement
-│   └── snowflake/                    # Curated warehouse models and marts
-├── src/                              # Reusable ingestion/transformation logic
-├── databricks/
-│   ├── bronze/
-│   ├── silver/
-│   └── gold/
-├── dashboards/
-│   ├── power_bi/
-│   ├── tableau/
-│   └── screenshots/
-├── reports/
-│   ├── data_audit.md
-│   ├── retention_findings.md
-│   ├── model_card.md
-│   ├── recommendations.md
-│   └── case_study.md
-└── tests/                            # Meaningful transformation/quality checks
-```
-
-Each SQL model or mart must declare grain, keys, source dependencies, temporal coverage, and intended consumers. Each notebook should contain purpose, inputs, reproducible configuration, analysis, checks, conclusions, and limitations.
-
-## 8. Progress tracker
-
-Status vocabulary: `Complete`, `In progress`, `Next`, `Planned`, `Blocked`, `Deferred`. Mark complete only when the completion gate has supporting evidence.
-
-| Phase | Status as of 2026-10-13 | Evidence / remaining work |
+| Phase | Status | Evidence / remaining work |
 |---|---|---|
-| 0 — Git and setup | Complete | Existing clone, ignore rules, charter, local commits; prior successful push |
-| Project continuity | Complete | Root master plan and AGENTS.md saved; Codex local project kkbox-analytics verified to point to the existing repository on 2026-09-25 |
-| 1 — Data audit | Complete | Full-data audit of both releases (notebook 01, reports, register DQ-001 to DQ-019); notebook 02 was run from a fresh kernel; a restart-and-run-all of notebook 01 is not recorded in this log |
-| 2 — PostgreSQL / pgAdmin | Complete | Staging and analytics schemas, repeatable load, reconciliation to the audit, logical data model (no foreign keys by design), nine SQL analyses (updates 15-17) |
-| 3 — Definitions / product analytics | Complete | Churn definition, label rebuild, monthly cohorts, renewal-gap and retention analyses, `docs/metric_definitions.md` (update 26); early-renewal labeling is a supported hypothesis with about 6,500 February disagreements unexplained |
-| 4 — Databricks | In progress | Log features built locally with DuckDB (21 months, leakage-checked); Databricks/PySpark implementation with a comparison to the local result still planned |
-| 5 — Snowflake | Planned | Curated serving marts and reconciliation |
-| 6 — Power BI | Planned | Executive dashboard and validated measures |
-| 7 — Tableau | Planned | Complementary exploration/storytelling |
-| 8 — Predictive modeling | Complete (first pass) | Time-ordered protocol with purge rule, rules and two models evaluated at K = 5/10/20% on 2017-01, 2017-02 and 2017-03, ablation, calibration, model card (update 24); open: early-renewer labeling, March population mismatch, release overlap |
-| 9 — Recommendations / experiments | Planned | Evidence-backed proposals and experiment design |
-| 10 — Final portfolio | Planned | README, visuals, case study, reproducibility review |
+| 0 Git and setup | Complete | Repository public, ignore rules in place |
+| 1 Data audit | Complete | Full-data audit of both releases; DQ-001 to DQ-019; a restart-and-run-all of notebook 01 is not recorded |
+| 2 PostgreSQL | Complete | Reconciled with the audit; no foreign keys by design |
+| 3 Definitions / descriptive analysis | Complete | `docs/churn_definition.md`, `docs/metric_definitions.md`; early-renewal labeling is a supported hypothesis |
+| 4 Databricks | In progress | Features built locally with DuckDB; PySpark version and comparison not done |
+| 5 Snowflake | In progress | dbt project works locally; Snowflake target not set up |
+| 6 Power BI | Planned | Power BI Desktop is Windows-only; Tableau or Streamlit may replace it |
+| 7 Tableau | Planned | |
+| 8 Predictive modeling | Complete (first pass) | Open: early-renewer labeling, March population mismatch, release overlap |
+| 9 Recommendations / experiments | Planned | |
+| 10 Final portfolio | Planned | README kept current; case-study write-up pending |
 
-### Exact next step
+**Open dependencies:** a Snowflake account and its time-limited trial (start only when ready; credentials come from environment variables and are never committed); a BI route that works on the owner's machine; confirmation of the source terms before publishing anything beyond code and aggregate findings.
 
-> **Superseded 2026-10-02:** the audit restarted on the complete dataset; see "At a glance" at the top for the current next action. The text below is the earlier (2026-09-28) state, kept for history.
+## 6. Decision log
 
-**Wait for user confirmation of the reorganized `notebooks/01_data_audit.ipynb`.**
-
-1. Review the source introduction, training/test sections, and structured table audits.
-2. Obtain explicit approval before adding any analysis code. No additional checks were added during organization.
-3. After confirmation, guide the user through any agreed remaining checks and a clean-kernel run in VS Code.
-4. Reconcile the audit report, dictionary, and issue register with the final notebook before closing Phase 1; those companion documents still reflect initialization.
-
-The user performs this project step by step in VS Code Jupyter. Provide guidance by default; edit or execute analysis only when explicitly requested. Do not advance to modeling or cloud work during this review.
-
-### Open decisions and dependencies
-
-| Item | When to resolve | Current state |
+| Date | Decision | Reason |
 |---|---|---|
-| Raw file availability, versions, sizes, and date spans | Phase 1 | Five CSV files now available. Saved notebook outputs establish observed schemas and date spans; official source/version semantics still require confirmation. |
-| Official label definition and business measurement window | Phases 1–3 | Must be documented from the selected data/version |
-| Relational keys, grain, deduplication and date-treatment rules | Phases 1–2 | Audit-dependent |
-| Databricks and Snowflake access, compute limits, and budget | Before cloud phases | Unverified; no paid resources provisioned by this plan |
-| Power BI authoring route and Tableau availability | Before dashboards | Unverified |
-| Feature windows and temporal holdout feasibility | Before modeling | Data-coverage dependent |
-| Final sharing format and permitted data redistribution | Before publishing | Confirm source terms; prefer code and aggregate findings |
+| 2026-09-25 | The existing Git repository is the workspace; this root plan is the canonical context | Keep decisions and progress with the implementation |
+| 2026-09-25 | Introduce tools progressively; descriptive analysis precedes prediction | A coherent business story and verified data contracts first |
+| 2026-10-02 | Public five-layer architecture and a simplified six-stage roadmap with one headline question; Tableau and Fabric optional | A short, question-driven path shows capability better than a tool tour |
+| 2026-10-02 | Restart the audit on the complete dataset (v1 and v2); convert the 30.5 GB logs once to text-typed Parquet and audit with DuckDB | The first audit covered v2 files only, and v2 is not a complete history |
+| 2026-10-05 | Record the official dataset description in `docs/source_dataset_notes.md` | Documented claims stay labeled as documented until verified |
+| 2026-10-05 | `CLAUDE.md` and `AGENTS.md` stay local only (git-ignored) | Private working instructions, not part of the portfolio |
+| 2026-10-06 | Remove the superseded `PROJECT_PLAN.md` | This plan replaces it; the file stays in the Git history |
+| 2026-10-06 | Rebuilt labels are used only up to 2017-02; March 2017 uses the official labels | Renewals after 2017-03-31 are invisible (right censoring) |
+| 2026-10-06 | Prediction unit is a user in a target month; cutoff is the last day of the previous month; time-ordered splits with a purge rule | Prevent leakage between months |
+| 2026-10-06 | No foreign keys on `msno` in PostgreSQL; unmatched users are kept | Records are not dropped to force integrity |
+| 2026-10-10 | Add dbt to stage D and a Streamlit app as optional; no stack claim before artifacts exist | Show tested, versioned modeling; keep the public story honest |
+| 2026-10-12 | Keep models trained on rebuilt labels and report both label sets side by side (option A); rebuilding all months with the official-style rule is deferred | The official-style rule is a supported hypothesis that cannot be verified for March |
+| 2026-10-12 | dbt only transforms; log scans and feature building stay in `src/` | Each tool does what it is good at |
+| 2026-10-13 | Condense this plan; keep full history in Git | The long log made the public plan hard to read |
 
-## 9. Decision and update log
+## 7. Update log
 
-| Date | Decision | Reason / evidence |
-|---|---|---|
-| 2026-09-25 | Use the existing Git repository as the development workspace | Local repository and initial setup already exist |
-| 2026-09-25 | Maintain this root-level master plan as canonical context | Keep accepted decisions and progress with the implementation |
-| 2026-09-25 | Develop an end-to-end retention analytics case study | User's agreed portfolio and learning objective |
-| 2026-09-25 | Introduce tools progressively; descriptive analysis precedes prediction | Preserve a coherent business story and verified data contracts |
-| 2026-09-25 | Start with `notebooks/01_data_audit.ipynb` | Agreed next deliverable; audit work has not been claimed complete |
-| 2026-10-02 | Public README uses a five-layer architecture: (1) data quality and preparation — Python/pandas/Parquet; (2) relational analytics — PostgreSQL; (3) behavioral data engineering — Databricks/PySpark; (4) cloud analytics serving — Snowflake; (5) BI and decision support — Power BI/Tableau. Fabric goes under a separate "Extension / Additional Platform Exploration" section, only after the main pipeline is complete. DuckDB, pgAdmin, Parquet, GitHub CLI, and Homebrew are supporting tools and are not featured in the architecture. The internal 10-phase roadmap is unchanged. | Keep the public story simple (raw → clean → modeled → behavioral features → warehouse → dashboard → decision). Every platform needs one-sentence rationale and a minimal demonstrable artifact; a platform without an artifact is not listed in the README or resume. |
-| 2026-10-02 | Adopt a simplified six-stage roadmap (A–F) with one headline question, four collapsed questions, and per-stage time caps (~10 weeks). Tableau and Fabric become optional extensions. Cutoff and feature windows are fixed in stage A. Detailed 10-phase plan retained as internal reference. | The goal is to demonstrate capability to hiring managers; a shorter, question-driven path avoids a tool tour and avoids rework between audit and feature engineering. |
-| 2026-10-05 | Record the official dataset description in `docs/source_dataset_notes.md` (documented release map, label definition, field notes). Official windows: `train` = February 2017 expirations, `train_v2` = March 2017, `sample_submission_zero` = original March test set, `sample_submission_v2` = April 2017 test (labels not public). | The user supplied the Kaggle data description. Documented claims stay labeled as documented until verified from local transactions. |
-| 2026-10-05 | Remove the superseded v2-only audit scripts `src/data_audit.py`, `src/audit_keys.py` and `tests/test_data_audit.py` (never committed; a copy was kept outside the repository). The notebook uses `src/audit_checks.py` and `src/audit_display.py` only. | The old scripts cover only the v2 files, hard-code file names, and are replaced by the DuckDB checks that cover v1 and v2; keeping them would be redundant and misleading in the portfolio. |
-| 2026-10-05 | `CLAUDE.md` and `AGENTS.md` stay local only: they are git-ignored and are never committed or pushed (standing instruction). The three unpushed commits of branch `phase1-data-audit` were recreated without them. | The files are private working instructions for AI assistants, not part of the portfolio. |
-| 2026-10-06 | Remove `PROJECT_PLAN.md` from the repository. | It is the original charter and is superseded by this master plan; keeping both duplicated content on the public repository. It remains available in the Git history. |
-| 2026-10-02 | Phase 1 audit restarts on the complete dataset (v1 and v2 files). Audit covers every file, including the 30.51 GB `user_logs.csv`, stored on an external SSD. Large CSVs are converted once to text-typed Parquet (`src/csv_to_parquet.py`) and audited with DuckDB. Earlier audit outputs (v2 files only) are not full-data evidence. | Earlier audit used only v2 files; `transactions_v2` (115 MB) vs `transactions.csv` (1.73 GB) suggests v2 is not the complete history. A full audit must cover all releases and their relationship. |
-
-At the end of a meaningful work session, update the last-updated date, affected phase status, artifact paths, validation evidence, open blockers, decisions, and exact next action. Use the following compact entry format:
+At the end of a meaningful work session, update the last-updated date, affected statuses, artifact paths, validation evidence, blockers, decisions, and the next action. Add a milestone row below and, when the evidence needs more than a row, a short entry in this format:
 
 ```text
 Date:
@@ -392,458 +138,24 @@ Next action:
 Commit or pull request, if created:
 ```
 
-Do not automatically mark planned tasks complete or describe an unexecuted notebook as verified. If later evidence changes the plan, record the reason and update the relevant sections rather than maintaining contradictory parallel plans.
-
-### 2026-09-28 — Audit initialization
-
-- Phase and status: Phase 1 in progress; dataset checks await source files.
-- Changes / artifacts: `notebooks/01_data_audit.ipynb`, `requirements.txt`, `reports/data_audit.md`, `docs/data_dictionary.md`, `reports/data_quality_issues.md`.
-- Validation performed and results: All three notebook code cells executed sequentially with Python 3.12.14 / pandas 2.2.3 against the empty raw directory; empty-inventory and no-profile assertions passed. This was not a Jupyter kernel execution or validation on actual KKBox records.
-- Findings versus hypotheses: No source files in the repository raw directory. All record-level quality concerns remain unverified.
-- Decisions and rationale: Start with a read-only inventory and a 10,000-row CSV prefix profile. Treat every prefix result as sample-only; no automatic cleaning or merging of releases.
-- Blockers / dependencies: Raw-data location requested. Local default Python lacks pandas/Jupyter; validation used an existing bundled runtime. No environment was installed or changed.
-- Next action: Obtain source path, inspect files/releases, run prefix profile, and implement appropriately bounded full-data checks.
-- Commit or pull request: None created.
-
-### 2026-09-28 — User-led audit and notebook organization
-
-- Phase and status: Phase 1 in progress; organization complete, awaiting user confirmation.
-- Changes / artifacts: Reorganized `notebooks/01_data_audit.ipynb` into source overview, training/test-user files, members, transactions, logs, and conclusions. Preserved all 49 nonempty code cells and their outputs unchanged; removed one empty code cell.
-- Validation: JSON structure, Python syntax, cell-level name dependencies, and exact code/output preservation checked. No full-data or fresh-kernel rerun; existing outputs are user-run evidence.
-- Findings: Corrected the transaction summary to 5,106 total early-expiration rows, including 5,104 cancellation rows and 2 others. Existing notebook already contains transaction missingness and binary-flag checks.
-- Decisions: No additional code without approval. Test-user section is introduction/status only because no corresponding audit code exists. Official playback-bin boundaries are not inferred from field names.
-- Remaining work: Test-user audit, training-user transaction coverage if approved, clean-kernel validation, and reconciliation of companion documentation. These are not claimed complete.
-- Next action: Wait for user confirmation; maintain the user's step-by-step learning workflow.
-- Commit or pull request: None.
-
-### 2026-09-28 — Requested test-user audit and findings revision
-
-- User explicitly authorized the sample-submission audit and targeted notebook edits; await approval after delivery.
-- Added and sequentially executed three test-user cells: 907,471 rows, two columns, no missing/duplicate IDs, all example predictions zero. 801,490 test IDs overlap training (88.32%); overlap alone is not leakage evidence.
-- Removed the requested duplicate-member preview and its stale output. Added gender NaN context and the effect of removing unmatched training users. Reorganized table findings into evidence, impact, and decisions.
-- Other analysis code preserved; no full-notebook rerun. Linked reference chat could not be fetched, so its content was not incorporated.
-- Test-user basic audit is now implemented; cross-table coverage and official windows remain open. Next action: wait for user approval, not further analysis.
-
-### 2026-09-28 — Supplied field definitions and Scala reference
-
-- Read the user-provided `WSDMChurnLabeller.scala`; did not execute it. Added notebook Section 1.2 with field definitions, NTD units, member schema discrepancy, and exact implemented label boundary (gap <30 renewal; >=30 churn).
-- Documented cancellation-adjusted expiration, deterministic same-day sorting, and the difference between demonstration date constants and actual train/test windows. Supplied member `expiration_date` is absent locally; illustrative malformed years are not dataset findings.
-- Validation: All notebook code cells and outputs unchanged. No label regeneration, new analysis code, or full rerun.
-- Next action: Wait for user confirmation; exact local label windows remain unresolved.
-
-### 2026-09-28 — Churn methodology documentation
-
-- Artifacts: Added the concise README Churn Definition section and `docs/churn_definition.md`; preserved other README content.
-- Evidence: Inspected the uploaded official Scala labeller and the complete competition examples supplied in the reference conversation. Documented the strict day-30 boundary, historical candidate selection, same-day ordering, cancellation adjustments, and example date corrections.
-- Validation: Documentation reviewed against source functions; no Spark execution or label reconstruction. Comparison with `train_v2.is_churn` remains planned, with local release/window alignment and outcome coverage unresolved.
-- Status: Definition documentation complete; Phase 3 analytics and empirical label validation remain planned. No analysis code or data changed.
-- Next action: Await the user's audit review; resolve local train/test temporal contracts before any authorized label-validation work.
-- Commit or push: None.
-
-### 2026-10-02 — Public architecture and platform-artifact decision
-
-- Date: 2026-10-02
-- Phase and status: No phase change; Phase 1 remains in progress.
-- Changes / artifacts: Documentation only. Added the decision-log row and a pointer under Section 5. No code, notebook, or data changed.
-- Validation performed and results: None (documentation decision).
-- Findings versus hypotheses: No new findings.
-- Decisions and rationale: Five-layer public architecture, Fabric as a post-pipeline extension, DuckDB/pgAdmin/Parquet/GitHub CLI/Homebrew as supporting tools. Minimum demonstrable artifacts per platform:
-  - Python/pandas/Parquet: audit notebook, issue register (finding → decision → treatment → validation), Parquet conversion script.
-  - PostgreSQL: DDL with key/FK coverage checks, ER diagram, 3–5 analysis SQL files, source-count reconciliation.
-  - Databricks/PySpark: Bronze/Silver/Gold exports, one user×cutoff Gold feature table, comparison with a pandas sample.
-  - Snowflake: three marts (subscriber snapshot, cohort retention, engagement trend) with declared grain/keys/refresh, plus reconciliation SQL.
-  - Power BI: `.pbix`, screenshots, measure definitions. Tableau: one workbook with 2–3 views that do not duplicate Power BI; first to cut if time is short.
-  - Fabric: one Lakehouse and one notebook, only after the main pipeline is complete.
-- Blockers / dependencies: Databricks, Snowflake, and Power BI environments and quotas remain unverified.
-- Next action: Unchanged — wait for the user's confirmation of `notebooks/01_data_audit.ipynb`. README is not rewritten until audit findings exist.
-- Commit or pull request: None.
-
-### 2026-10-02 — Simplified roadmap adopted
-
-- Date: 2026-10-02
-- Phase and status: No phase change; stage A (Phase 1) remains in progress.
-- Changes / artifacts: Added the "Simplified public roadmap" subsection to Section 3 and a decision-log row. Documentation only; no code, notebook, or data changed.
-- Validation performed and results: None (documentation decision).
-- Findings versus hypotheses: The claim that supplied labels cover only one or two expiration months is a hypothesis from general knowledge of the competition and the labeller design, not verified locally.
-- Decisions and rationale: See decision log.
-- Blockers / dependencies: Cloud environments unverified.
-- Next action: Unchanged — wait for the user's confirmation of `notebooks/01_data_audit.ipynb`; then verify the expiration-window distribution of `train_v2` users from `transactions_v2` as a stage A check.
-- Commit or pull request: None.
-
-### 2026-10-02 — Full-dataset audit restart
-
-- Date: 2026-10-02
-- Phase and status: Stage A / Phase 1 in progress; audit restarts on the complete dataset.
-- Changes / artifacts: Added `src/csv_to_parquet.py` (written, syntax-checked, not executed). Documentation updated. Full dataset inventory: v1 `train`, `transactions`, `user_logs`; v2 `train_v2`, `transactions_v2`, `user_logs_v2`; `members_v3`; `sample_submission_v2`, `sample_submission_zero`; `WSDMChurnLabeller.scala`. `user_logs.csv` (30.51 GB) extracted on an external SSD. Environment: 16 GB RAM, DuckDB 1.5.4, pyarrow 19.0.0 available.
-- Validation performed and results: Syntax check only. No conversion or audit run yet; earlier v2-only outputs remain user-run evidence for v2 files only.
-- Findings versus hypotheses: Hypothesis (unverified): v2 transactions are a short recent extract, not full history; v1 and v2 label files cover different expiration months.
-- Decisions and rationale: See decision log. Raw files stay unchanged; Parquet columns are text-typed to avoid silent type coercion; paths are passed as arguments, not committed.
-- Blockers / dependencies: None known.
-- Next action: User runs the conversion for `user_logs.csv` and `user_logs_v2.csv` (row-count check enforced), then re-run the audit per release, check the v1/v2 relationship, and verify the label windows of `train` and `train_v2`.
-- Commit or pull request: None.
-
-### 2026-10-02 — Full-data log audit and reusable audit module
-
-- Date: 2026-10-02
-- Phase and status: Stage A / Phase 1 in progress; user logs audited on the complete dataset, other tables still to be re-run on v1 + v2.
-- Changes / artifacts: `src/csv_to_parquet.py` executed by the user (row counts matched: v1 392,106,543; v2 18,396,362). New `src/audit_checks.py` (DuckDB-based reusable checks: table_summary, missingness, key_uniqueness, exact_duplicates, value_counts_pct, numeric_range, date_validity, monthly_coverage, flag_counts, coverage) and `tests/test_audit_checks.py`. Notebook section 5 (user logs) rebuilt by the user with DuckDB; the notebook has not been refactored to call `src/audit_checks.py` yet.
-- Validation performed and results: 13 unit tests pass (new + existing). Regression of the new functions against the earlier v2-only notebook results: 26/26 values reproduced (e.g., train_v2 970,960 rows and 8.99% label rate; 801,490 test users in train = 88.32%; 5,106 early-expiry transactions, 5,104 cancellations; 754,551 train users with v2 logs = 77.71%). Regression script was run ad hoc and is not committed.
-- Findings (full data, user logs): v1 covers 2015-01-01 to 2017-02-28 (5,234,111 users); v2 covers 2017-03-01 to 2017-03-31 (1,103,894 users); 27 consecutive months, no gaps or overlap. No duplicate (msno, date) key in either release. `msno` always 44 characters with no padding. No missing or non-numeric values in the numeric columns. `total_secs` anomalies: v1 61,493 negative, 137,007 between 1 and 7 days, 5,921 between 7 days and 1e12, 65 above 1e12 (about 0.052% of rows); v2 4,200 above one day (about 0.023%); anomalies are spread over all v1 months, not one event. Source values untouched; treatment is planned for the Silver layer (null plus flag, original kept) pending the user's decision.
-- Hypotheses (unverified): v2 logs are a one-month continuation of v1; v1 and v2 label files cover different expiration months; `transactions_v2` is a short extract rather than full history.
-- Decisions and rationale: DuckDB is the single audit engine (works on Parquet, CSV, and DataFrames); pandas is used for display and case analysis. Old `src/data_audit.py` and `src/audit_keys.py` are kept until the notebook uses the new module.
-- Blockers / dependencies: Notebook sections 2-4 and 5.5-5.6 still use v2 files only.
-- Next action: Re-run sections 2-4 for v1 + v2 via `src/audit_checks.py`; compare `train` vs `train_v2` (overlap, label changes); check training-user coverage in v1 + v2 logs; verify label windows from transactions.
-- Commit or pull request: None.
-
-### 2026-10-04 — Release relationships and notebook refactor plan
-
-- Date: 2026-10-04
-- Phase and status: Stage A / Phase 1 in progress.
-- Changes / artifacts: No new code files. Drafted v1 + v2 notebook cells (shared setup, merged views `train_all` / `tx_all` / `logs_all`, section 2.7 train and test-user checks, section 4.9 transactions v1 vs v2). Nothing from 2026-10-02 or 2026-10-04 has been committed to Git yet; the first commit is planned for 2026-10-05.
-- Validation performed and results: User ran the train overlap query (full data). Users present in both `train` (v1) and `train_v2` (v2): 881,701. Label transitions (v1 → v2): 0→0 824,659; 0→1 40,721; 1→0 5,269; 1→1 11,052. Derived: 4.71% of v1-retained overlap users are churn in v2; 67.7% of v1-churned overlap users are churn again in v2. Overlap is about 90.8% of `train_v2` rows. Results for sections 2.7.1, 2.7.2, 2.7.4 and 4.9 are not yet recorded.
-- Findings versus hypotheses: Verified (full data): the overlap and transition counts above. Hypotheses (unverified): `train` and `train_v2` cover different expiration windows (likely February and March 2017); v1-churned users returning in v2 are re-subscribers after churn; `transactions_v2` overlaps `transactions` and needs de-duplication before merging.
-- Decisions and rationale: Merge rules by table. `user_logs`: union with a `release` column (disjoint months, no duplicate keys, verified). `train`: no de-duplication; keep both observations in a long table with `release`, because they are different windows. `transactions`: decide after the section 4.9 overlap check. `members_v3`, sample submissions: not merged. Audit-phase merging uses views only; raw files and Parquet are never modified. A "Release map" table (per table: v1 range, v2 range, relationship, merge rule, evidence) will be written once in the notebook (new section 1.3), mirrored in `docs/data_dictionary.md`, with a 4–5 row version in the README Data section. Notebook workflow: replace the older inline audit code with calls to `src/audit_checks.py` (the user runs the notebook; guidance by default).
-- Blockers / dependencies: Section 2.7 and 4.9 outputs pending from the user. Modeling note: about 90.8% of `train_v2` users also appear in `train`; a v1-train / v2-validation split must document this overlap and use only pre-cutoff features.
-- Next action: see "At a glance".
-- Commit or pull request: None.
-
-### 2026-10-05 — Official dataset description recorded; v1 + v2 results confirmed
-
-- Date: 2026-10-05
-- Phase and status: Stage A / Phase 1 in progress.
-- Changes / artifacts: Added `docs/source_dataset_notes.md` (documented release map, label definition, field notes, implications, verification list) and a pointer in `docs/data_dictionary.md`. Notebook now contains sections 2.7 (train v1 + v2 and test users) and 4.9 (transactions v1 vs v2), run by the user.
-- Validation performed and results (full data, user-run): `train_v1` 992,931 rows (6.39% label rate); `train_v2` 970,960 rows (8.99%); no duplicate or missing keys; 881,701 users in both. `sample_submission_v2` 907,471 users, 88.32% in `train_v2`, 88.26% in `train_v1`; `sample_submission_zero` 970,960 users. `transactions.csv` 21,547,746 rows (2015-01-01 to 2017-02-28) and `transactions_v2.csv` 1,431,009 rows (361,187 before March 2017, 1,069,822 in March); zero rows identical across the two; 94.78% of v2 transaction users also appear in v1. `transactions.csv` has `membership_expire_date` as early as 1970-01-01 (count not yet measured). Exploratory read-only check, to be reproduced in notebook section 4.9: 7,249 (user, transaction date) keys appear in both releases, always with a different expiration date.
-- Findings versus hypotheses: The February/March windows for `train`/`train_v2` and the March identity of `sample_submission_zero` are now documented by the official description (user-supplied) and consistent with local counts, but not yet verified from transactions. `user_logs_v2` is observed as March-only, whereas the description says the refreshed files contain data until 2017-03-31; the local v2 files behave as increments.
-- Decisions and rationale: See decision log. Keep the label tables as observation-level (user × window); derive user-level tables separately with a stated rule. Whether to restrict to users present in both windows is deferred: default is all users per window, with overlap and non-overlap users reported separately. A February-window label is not used as a March-window feature until windows are verified.
-- Verified (full data, user-run, 2026-10-05): all 970,960 `sample_submission_zero` users are in `train_v2` (100% match); the two files contain the same user set.
-- Blockers / dependencies: Pending output of the extra section 4.9 cell (v2 early transaction rows, shared keys, count of pre-2015 expiration dates in `transactions.csv`).
-- Next action: see "At a glance".
-- Commit or pull request: None.
-
-### 2026-10-05 (update 2) — Section 2 rewritten on v1 + v2
-
-- Date: 2026-10-05
-- Phase and status: Stage A / Phase 1 in progress. Notebook sections 1 and 2 revised; section 3 next.
-- Changes / artifacts: New `src/audit_display.py` and `tests/test_audit_display.py`; `CLAUDE.md` rewritten to match the current workflow (DuckDB audit engine, new files, working rules); `requirements.txt` now lists `duckdb`. Setup cell replaced by a shared setup and file inventory; section 2 restructured into 2.1 schema, 2.2 structure and key checks, 2.3 label distribution, 2.4 v1–v2 overlap, 2.5 test rosters, 2.6 findings, with `show()` titles and tables.
-- Validation performed and results: 18 unit tests pass. File inventory matches earlier row counts for all nine registered tables. Reviewed outputs (full data): `train_v1` 992,931 and `train_v2` 970,960 rows, unique and complete; label rates 6.39% and 8.99%. `sample_submission_zero` users are exactly the `train_v2` users (100% match). The saved notebook file on disk still showed the older section 2 when checked; the user is to save it.
-- Findings versus hypotheses: Unchanged from the earlier entry; the label windows remain documented but not verified from transactions.
-- Decisions and rationale: DuckDB computes and pandas presents (`.df()`, pivot, case studies); pandas stays visible for analysis and modeling. Legacy `raw_dir` and `train` stay until sections 3 and 5.6 are rewritten.
-- Blockers / dependencies: None.
-- Next action: see "At a glance".
-- Commit or pull request: None (first daily commit still pending).
-
-### 2026-10-05 (update 3) — Section 3 (members) rewritten and independently verified
-
-- Date: 2026-10-05
-- Phase and status: Stage A / Phase 1 in progress; notebook sections 1–3 revised.
-- Changes / artifacts: Section 3 of `notebooks/01_data_audit.ipynb` was rewritten on DuckDB (`src/audit_checks.py`, `show()`), written by a parallel Claude session; this session reviewed it without editing the notebook. `src/audit_display.py` now shows tiny non-zero percentages as `<0.01%` (test added; 19 unit tests pass).
-- Validation performed and results: All six section 3 code cells were executed headlessly and read-only against the full data without errors, and every number in the 3.7 findings table reproduced: 6,769,473 members, unique and complete `msno`; gender missing 4,429,505 (65.43%); `bd` zero 4,540,215 (67.07%), negative 274, above 100 5,377, range -7,168 to 2,016, within 1–100 2,223,607 (32.85%); 4,388,613 rows (64.83%) with both gender missing and zero age; registration dates 2004-03-26 to 2017-04-29, 154,166 (2.28%) after 2017-02-28 and 55,094 (0.81%) after 2017-03-31; one `registered_via = -1` record; member coverage `train_v1` 877,161 of 992,931 (88.34%), `train_v2` 860,967 of 970,960 (88.67%), `sub_zero` 88.67%, `sub_v2` 795,090 of 907,471 (87.62%); label rate for unmatched vs matched users 5.02% vs 6.57% (`train_v1`) and 5.35% vs 9.46% (`train_v2`); left joins preserve all label rows. Section 3 cells have no saved outputs yet (not run in the notebook kernel). Section 2 outputs in the saved notebook were checked for the transition and coverage numbers.
-- Findings versus hypotheses: Verified (full data): the numbers above. Descriptive only: unmatched users have a lower label rate; this does not show that profile completeness affects churn. Open: meaning of zero age and of channel `-1`; demographic treatment rules; temporal eligibility of members.
-- Decisions and rationale: Keep all labeled users with a left join; preserve missing gender as an explicit unknown group; preserve raw `bd` and define review flags before any cleaning. Use one editor at a time for the notebook to avoid conflicting edits between sessions.
-- Blockers / dependencies: Cell 3 no longer defines the legacy `train` variable that the old section 5.6 uses.
-- Next action: see "At a glance".
-- Commit or pull request: None (first daily commit still pending).
-
-### 2026-10-05 (update 4) — Section 4 (transactions) rewritten and independently verified
-
-- Date: 2026-10-05
-- Phase and status: Stage A / Phase 1 in progress; notebook sections 1–4 revised, section 5.5–5.6 next.
-- Changes / artifacts: Section 4 of `notebooks/01_data_audit.ipynb` was rewritten on DuckDB for `transactions.csv` (v1) and `transactions_v2.csv` (v2), 4.1–4.8, by a parallel Claude session; this session reviewed it without editing the notebook. The old 4.9 cells were folded into 4.7.
-- Validation performed and results (full data, read-only headless run of all seven code cells, no errors; every figure in the 4.8 table reproduced): v1 21,547,746 rows and 2,363,626 users; v2 1,431,009 rows and 1,197,050 users; no missing values. Exact duplicates: v1 3,339 excess rows, v2 0. Same user and day: 286,404 (v1) and 33,292 (v2) rows beyond the first, up to 48 and 131 rows per key. Flags binary; plan days 0–450; prices 0–2,000. Zero-day plans: v1 870,124 (4.04%), v2 2,218 (0.15%), mostly with a nonzero payment. Expiration before 2015 in v1: 9,840 rows (1,776 on 1970-01-01), none in v2. Expiration before transaction date: v1 153,660 (147,200 cancellations = 17.18% of cancellation rows; 6,460 non-cancellations), v2 5,106 (5,104 cancellations, 2 non-cancellations). Long expiry: largest gap 814 days (v1) and 7,303 days (v2, one member); 19,357 v2 rows above 1,000 days, none in v1. Case member (78 records): 75 of 77 expiry increments equal plan days. Release relationship: 0 identical rows; 94.78% of v2 users also in v1 (48.00% of v1 users in v2); of 361,187 v2 rows dated before March 2017, 9,967 share a (user, date) key with a v1 row; 7,249 keys occur in both releases (42,257 row pairs) and the expiration date differs in every pair.
-- Findings versus hypotheses: Verified: the figures above. New observation: the pre-March v2 rows concentrate near the end of the v1 window (128,916 dated February 2017 and 32,871 dated January 2017, together about 44.8% of the 361,187). Hypothesis (unverified): v2 re-extracts or adds late-arriving recent history; the conflicting-key pairs may reflect same-day stacked renewals. Source-notes verification item for pre-2015 expiration dates is now measured.
-- Decisions and rationale: Do not drop exact duplicates, same-user-same-day rows, early or distant expiration dates, or zero-day plans in the audit; flag them in the Silver layer. Stack the releases as `tx_all` with a `release` column; a rule for the 7,249 conflicting keys must be defined before sequences are rebuilt (not decided).
-- Blockers / dependencies: Section 4 cells have no saved outputs yet (not run in the notebook kernel).
-- Next action: see "At a glance".
-- Commit or pull request: None (first daily commit still pending).
-
-### 2026-10-05 (update 5) — What `transactions_v2` adds to `transactions` (exploratory, read-only)
-
-- Date: 2026-10-05
-- Phase and status: Stage A / Phase 1 in progress.
-- Changes / artifacts: None in the repository. Exploratory read-only queries (not yet reproduced in the notebook) prompted by the user's observation that the monthly row counts of v2 before March 2017 are far below v1.
-- Validation performed and results (full data, exploratory): The 361,187 v2 rows dated before March 2017 belong to 262,429 users, of whom 234,380 (89.3%) also appear in v1; 167,069 of them (63.7%) have no March 2017 row in v2 at all, so the earlier hypothesis that these rows re-extract history for users active in March is not supported. Relative to the same user's latest earlier v1 transaction date (using the latest expiration date on that date, so the result is reproducible), 227,254 of the 361,187 rows (62.9%) fall inside an active v1 membership period, 92,696 (25.7%) follow a v1 expiration gap, and 41,237 (11.4%) have no earlier or same-day v1 row. An earlier version of this check that picked an arbitrary v1 row when several shared a date gave slightly different, non-reproducible counts (about 62.7% and 25.9%). The pre-March v2 rows skew toward long plans (410-day plans 21% of them versus 0.37% of v1 rows) and non-cancellations (99.04% versus 96.02%). v2 was built around the later populations: all 907,470 of 907,471 `sample_submission_v2` users and 933,578 of 970,960 (96.15%) `train_v2` users have at least one v2 transaction row, while the 167,069 early-only users are mostly outside the label tables (4.35% in `train_v2`, 13.38% in `train_v1`, 15.07% in `sub_v2`).
-- Findings versus hypotheses: Verified (exploratory): the counts above. Supported but unproven: `transactions_v2` is March 2017 plus a supplement of older rows that `transactions` lacks, not a plain extension; the pre-March rows are not a re-extract for March-active users. Unknown: why those rows exist (late-arriving records and stacked long-plan purchases are both candidate explanations). Monthly row counts of the two releases are not like-for-like (v1 covers 2,363,626 users; v2 covers 1,197,050).
-- Decisions and rationale: Rebuilding expiration chains or user history features needs v1 and v2 together (`tx_all`); neither release alone is a complete history. The rule for conflicting (user, date) keys remains to be defined. Reproduce these diagnostics in notebook section 4.7 before citing them as audit evidence.
-- Blockers / dependencies: The notebook's section 4.8 "Open" item still states the March-active re-extract hypothesis; it should be revised.
-- Next action: see "At a glance".
-- Commit or pull request: None.
-
-### 2026-10-05 (update 5b) — Are the conflicting transaction keys complementary? (exploratory, read-only)
-
-- Date: 2026-10-05
-- Phase and status: Stage A / Phase 1 in progress.
-- Changes / artifacts: None in the repository; exploratory queries, not yet reproduced in the notebook.
-- Validation performed and results (full data, exploratory): The 7,249 (user, transaction date) keys present in both releases hold 9,711 v1 rows and 9,967 v2 rows (about 1.3–1.4 rows per key per side), so the 42,257 row pairs reported earlier are cross-combinations, not one-to-one copies. In 14,179 of 14,498 key-and-release groups (97.8%) all rows share one plan duration, amount and cancel flag, i.e. they look like repeated purchases of the same plan with different expiration dates. Sorting the rows of each key by expiration date, the expiration increment equals the plan duration for 92.3% of consecutive rows from the same release (4,779 of 5,180) and for 63.6% of consecutive rows from different releases (4,612 of 7,249).
-- Per-field differences across the 42,257 v1–v2 row pairs of the shared keys: expiration date 100%; amount paid 9.12%; list price 8.96%; payment method 7.38%; plan days 6.94%; auto-renew 4.01%; cancel flag 3.96%; 37,856 pairs (89.59%) differ only in the expiration date.
-- Findings versus hypotheses: Consistent with, but not proof of, v2 supplying additional links of same-day stacked purchases that v1 lacks; about 36% of cross-release adjacent pairs do not follow the plan-duration increment (possible missing rows or revised expiration dates). Whether v1 plus v2 is a complete history remains unverified.
-- Decisions and rationale: Merging means stacking both releases (`tx_all`, release column kept), never overwriting or de-duplicating on user and date. The physical merged table is built in the staging/Silver step with the conflicting-key handling documented; the audit uses the view only.
-- Blockers / dependencies: Reproduce these diagnostics in notebook section 4.7 before citing them as audit evidence.
-- Next action: see "At a glance".
-- Commit or pull request: None.
-
-### 2026-10-05 (update 6) — Section 5 (user logs) redrafted and verified
-
-- Date: 2026-10-05
-- Phase and status: Stage A / Phase 1 in progress.
-- Changes / artifacts: Drafted new cells for notebook section 5 (5.1–5.7) on `src/audit_checks.py` and `show()`, replacing the older raw-SQL and v2-only pandas cells; not yet pasted into the notebook by the user. In the same environment the system `python3` had no DuckDB; the project's Anaconda interpreter was used.
-- Validation performed and results (full data, read-only headless run of all drafted cells): v1 392,106,543 rows, 5,234,111 users, 2015-01-01 to 2017-02-28; v2 18,396,362 rows, 1,103,894 users, 2017-03-01 to 2017-03-31; no missing or invalid values; (`msno`, `date`) unique in each release; 790 distinct dates in v1 and 31 in v2 with none in both, so keys cannot repeat across releases; 27 consecutive months; `msno` always 44 characters. `total_secs`: v1 61,493 negative rows (29,929 users), 137,007 rows between one and seven days, 5,921 between seven days and 1e12, 65 above 1e12; v2 4,200 rows above one day; anomalies occur in every month. User overlap: 998,583 users in both releases (90.46% of v2 users, 19.08% of v1 users). Coverage of users with at least one log row (v1 or v2): `train_v1` 87.76%, `train_v2` and `sub_zero` 88.07%, `sub_v2` 86.87%; v2 only: 74.51%, 77.71%, 77.71%, 77.16%. The v2-only figure for `train_v2` (754,551 users) reproduces the earlier v2-only result.
-- Findings versus hypotheses: Verified (full data): all figures above. Open: whether users without logs are the same as users without member profiles; plausibility of extreme play counts; thresholds and treatment for `total_secs`.
-- Decisions and rationale: A direct global group-by of (`msno`, `date`) over both releases exceeded the 8 GB memory limit; cross-release uniqueness is instead shown by disjoint date sets plus within-release uniqueness. Treatment of `total_secs` anomalies (flag and null in Silver, original kept) remains to be confirmed.
-- Blockers / dependencies: None.
-- Next action: see "At a glance".
-- Commit or pull request: None.
-
-### 2026-10-05 (update 7) — Companion documents rewritten from the full-data audit
-
-- Date: 2026-10-05
-- Phase and status: Stage A / Phase 1; the audit analysis is complete, closing items remain.
-- Changes / artifacts: Rewrote `reports/data_audit.md` (scope, release map, findings by table, decisions, open items, reproduction), `reports/data_quality_issues.md` (register DQ-001 to DQ-019 with evidence, severity, risk, planned treatment, status), and `docs/data_dictionary.md` (observed schema, grain, ranges, documented definitions). Updated `CLAUDE.md`. The saved notebook (19:13) had 30 of 30 code cells executed (counts 75–104, consecutive) with no errors; the 4.8 and 5.x revisions are in it.
-- Validation performed and results: Every figure in the documents was taken from the verified notebook outputs or headless full-data runs recorded in the entries above. While writing, one wording error was found and fixed (an unfinished figure for `total_secs` rows above one day: 142,993 in v1, 4,200 in v2) and one over-claim removed (identifier length and padding were checked only for user logs, not for label tables or members).
-- Findings versus hypotheses: Unchanged; hypotheses are marked in the register (supplement role of the pre-March transaction rows, complementary shared keys, label windows).
-- Decisions and rationale: All data-quality treatments are planned for the Silver layer and none has been applied; the register is the traceable record (finding, decision, treatment, validation).
-- Blockers / dependencies: The notebook is missing the "which fields differ" cell in 4.7.1 (the 89.59% figure in 4.8 and the register lacks a notebook output) and the Release map (1.3); the last run was sequential but the kernel was not restarted.
-- Next action: see "At a glance".
-- Commit or pull request: None (first daily commit still pending).
-
-### 2026-10-05 (update 8) — Notebook run confirmed; old audit scripts removed
-
-- Date: 2026-10-05
-- Phase and status: Stage A / Phase 1: the data audit is complete on the full dataset; closing items are listed below.
-- Changes / artifacts: Confirmed the saved notebook (19:29): 69 cells, 31 of 31 code cells executed with counts 1 to 31 in file order (fresh kernel), no errors, Release map (1.3) present, "which fields differ" cell present with its outputs (89.59%, 37,856), no stale text. Deleted `src/data_audit.py`, `src/audit_keys.py`, `tests/test_data_audit.py`; updated `CLAUDE.md` and `reports/data_audit.md` accordingly. 17 unit tests pass.
-- Validation performed and results: Notebook outputs contain every key figure recorded in the register; tests rerun after deletion.
-- Findings versus hypotheses: Unchanged.
-- Decisions and rationale: See decision log (old scripts removed).
-- Blockers / dependencies: Before the first commit, replace the hard-coded external-drive paths in the notebook setup cell (cell 3) with environment-variable settings, remove the five raw user identifiers shown in the section 3.1 preview output (cell 21), and scrub the two absolute local paths in this plan (clone path in Section 2; interpreter path in update 6).
-- Next action: see "At a glance".
-- Commit or pull request: None (first daily commit pending the items above).
-
-### 2026-10-05 (update 9) — Phase 1 audit committed on branch `phase1-data-audit`
-
-- Date: 2026-10-05
-- Phase and status: Stage A / Phase 1: audit analysis and documentation complete and committed; Stage A definitions next.
-- Changes / artifacts: Created branch `phase1-data-audit` from `main` and made three commits: project plan and dataset notes; reusable DuckDB audit checks, display helper, Parquet converter, tests, requirements, example machine settings; audit notebook, audit report, issue register, data dictionary. The commits were recreated once so that `CLAUDE.md` and `AGENTS.md` (local only) are not in the history. Machine-specific paths now live in the git-ignored `local_settings.py` (an example file is committed). Commit messages carry no attribution lines (standing instruction).
-- Validation performed and results: Before committing, the staged content was scanned for machine paths, 44-character user identifiers, and credential-like text (none found); the notebook was re-run top to bottom after the path and identifier fixes (31 of 31 cells executed, no errors); 17 unit tests passed. Working tree clean after the commits (data, `local_settings.py`, `.DS_Store`, caches ignored).
-- Findings versus hypotheses: Unchanged.
-- Decisions and rationale: Work stays on a branch until the user decides on merging; nothing was pushed to GitHub.
-- Blockers / dependencies: None.
-- Next action: see "At a glance".
-- Commit or pull request: Branch `phase1-data-audit` with three commits, pushed to GitHub on 2026-10-05 (no pull request opened, `main` unchanged). This plan update is uncommitted and goes into the next commit.
-
-### 2026-10-05 (update 10) — Label windows and cutoffs checked against transactions (exploratory)
-
-- Date: 2026-10-05
-- Phase and status: Stage A definitions in progress (label-window verification started); README drafted (uncommitted).
-- Changes / artifacts: Drafted a new `README.md` (status table, audit findings, data and reproduction steps, repository map, limits; numbers checked: about 444 million rows audited, about 34 GB of raw data). Translated the official `WSDMChurnLabeller.scala` into read-only DuckDB queries (scratch scripts, not in the repository) to rebuild labels from `tx_v1` plus `tx_v2` and compare them with `train.csv` and `train_v2.csv`. Key reading of the labeller: the rule needs transactions after the cutoff, so the February window can only be labeled with the March rows in `transactions_v2`; `transactions.csv` alone ends on 2017-02-28.
-- Validation performed and results (full data, exploratory, not yet in a notebook): (1) Labeller rule (last expiration inside the target month), cutoff at the end of the previous month, full history from 2015: February window rebuilds 879,537 users, 879,478 of them in `train.csv` (88.57% of its 992,931 users; 59 extra) with 98.36% label agreement; March window rebuilds 886,500 users, 862,158 in `train_v2.csv` (88.79% of 970,960; 24,342 extra) with 95.73% agreement. (2) Cutoff scan: coverage of the official users grows as the cutoff moves toward the end of the previous month (February window: 13.5% at 2017-01-01, 79.1% at 2017-01-25, 88.57% at 2017-01-31, 86.69% at 2017-02-01; March window: 12.58% at 2017-02-01, 78.72% at 2017-02-25, 88.79% at 2017-02-28, 88.67% at 2017-03-01); the March extras fall from 24,342 to 7,066 at a 2017-03-01 cutoff while agreement drops to 94.84%. (3) Population rule: where the labeller rule leaves about 11% of the official users unplaced (for example 92,868 `train.csv` users whose last expiration lies after February, churn label rate 6.87%, 18,490 whose last expiration lies before it), the looser rule "any transaction up to the cutoff expires in the target month" covers 99.06% of `train.csv` users (597 extra) and 98.68% of `train_v2.csv` users (33,413 extra). (4) Labels follow the rule on the rebuilt users with 95.7–98.4% agreement, not exactly.
-- Findings versus hypotheses: Strongly supported (exploratory): `train.csv` is the February 2017 expiration window and `train_v2.csv` the March window, with the prediction cutoff at the end of the previous month. Hypothesis: the official training sample selects users with any expiration inside the target month, not only the last expiration as in the demonstration script; the treatment of early renewers and the 24,342 March extras is unexplained. Not an exact reproduction of the official labels.
-- Decisions and rationale: Implement the labeller as tested reusable code and document the cutoff and population choices in a new notebook before using any label-derived analysis; treat the loose population rule as the working hypothesis until the unexplained groups are examined.
-- Blockers / dependencies: None.
-- Next action: see "At a glance".
-- Commit or pull request: None (README and plan changes uncommitted; the audit branch is pushed, not merged).
-
-### 2026-10-06 (update 11) — Cross-month analysis agreed; right-censoring of reconstructed labels
-
-- Date: 2026-10-06
-- Phase and status: Stage A definitions / start of Stage B; the goal for the next days is a presentable public repository first, refinements afterwards.
-- Changes / artifacts: None in the repository. Exploratory read-only check of where rebuilt labels disagree with the official ones.
-- Validation performed and results (full data, exploratory): Among users present in both the rebuilt and the official label sets, the share of users rebuilt as churn but labeled renewal by the official file rises with the expiration day in the March window (0.13% for days 1–7, 0.42% for days 8–15, 0.86% for days 16–23, 2.22% from day 24) but stays at 0.01–0.03% in the February window. Transactions end on 2017-03-31, so a March expiration late in the month can renew in April without the renewal being observable.
-- Findings versus hypotheses: Consistent with right-censoring (inference, not proof): labels rebuilt from the supplied transactions are reliable only when the 30-day outcome window ends inside the data, i.e. for target months up to February 2017; the March 2017 cohort must use the official `train_v2` labels.
-- Decisions and rationale: The user wants cross-month (cohort) analysis to show breadth. Plan: implement the labeller as tested reusable code, rebuild monthly cohorts after a burn-in period (history starts 2015-01-01 and plans last up to 450 days) up to February 2017, add March 2017 from the official labels, and use the cohorts for churn-over-time, cohort retention, and rolling time-ordered validation. Sequence: first publish the repository (README, merge to `main`), then build the cross-month work.
-- Blockers / dependencies: None.
-- Next action: see "At a glance".
-- Commit or pull request: None.
-
-### 2026-10-06 (update 12) — Label rebuild implemented and monthly cohorts computed (exploratory)
-
-- Date: 2026-10-06
-- Phase and status: Stage A definitions / start of the cross-month analysis (code written, notebook not yet written).
-- Changes / artifacts: Added `src/churn_labels.py` (`month_window`, `rebuild_labels`, `rebuild_months`: the official labeller rules in DuckDB, cutoff at the end of the previous month) and `tests/test_churn_labels.py` (the three official examples from `docs/churn_definition.md`, the 29/30-day boundary, cancellations that move the expiration earlier, same-day ordering, no later transaction, history start, month windows). Removed `PROJECT_PLAN.md` from the repository earlier the same day. Code and tests are uncommitted.
-- Validation performed and results: 29 unit tests pass (existing and new). On the full data the module reproduces the earlier exploratory results exactly: the February 2017 window rebuilds 879,537 users (879,478 in `train.csv`, 98.36% label agreement) and the March 2017 window 886,500 users (862,158 in `train_v2.csv`, 95.73%). Monthly cohorts for 2015-02 to 2017-03 were rebuilt (26 months, 17,869,628 user-month rows, 169 seconds). Cohort size grows from about 393 thousand users (2015-02) to about 880 thousand (2017-02); the churn label rate varies from 3.7% to 19.2%. Rebuilt rates are lower than the official ones because the rebuilt population is smaller (February 2017: 3.95% against 6.39%; March 2017: 4.93% against 8.99%), so the two must not be compared directly.
-- Findings versus hypotheses: Verified (exploratory): two spike months are driven by batches of users who share an expiration day. In 2015-04, 92,575 users expire on April 30 with a 79.8% churn rate, and 15.3% of that month's candidates have a list price of zero (0.0% in March 2015). In 2016-03 several expiration days (25, 29, 30, 1, 28) show 35–50% churn. Hypothesis (not verified): promotion or free-trial style cohorts that churn at high rates; the cause is unknown.
-- Decisions and rationale: Use target months 2015-07 to 2017-02 (20 months, rebuilt) plus 2017-03 (official `train_v2` labels) as the analysis cohorts; the earlier months stay in charts as a shaded burn-in period (history starts 2015-01-01 and long plans are invisible until renewed). The choice of 2015-07 is a judgment call. Report cohort mix (plan type, zero-price plans) next to churn over time.
-- Blockers / dependencies: None.
-- Next action: write the cohort notebook (`02_...`): monthly cohorts, churn over time, the spike investigation, comparison with the official labels, retention view; then update the README.
-- Commit or pull request: None.
-
-### 2026-10-06 (update 12b) — Why the rebuilt population and churn rate differ from the official labels (exploratory)
-
-- Date: 2026-10-06
-- Phase and status: Stage A definitions.
-- Changes / artifacts: None in the repository (read-only diagnostics).
-- Validation performed and results (full data, exploratory): (1) Population: the 113,453 `train.csv` users not rebuilt are 2,095 with transactions only after the cutoff, 18,490 whose last expiration lies before February (41.47% churn labels) and 92,868 whose last expiration lies after February (6.87%); together their churn label rate is 12.96% against 5.54% for the 879,478 rebuilt users in `train.csv`. For `train_v2.csv` the 108,802 users not rebuilt (2,524 / 20,813 / 85,465) have a 22.71% churn label rate against 7.26% for the 862,158 rebuilt users. The looser population rule "any transaction up to the cutoff expires in the target month" covers 99.06% (February) and 98.68% (March) of the official users. (2) Labels inside the shared users: the official file marks more users as churn than the rebuild: 14,193 in February (the rebuild says renewed) and 28,373 in March, against 199 and 8,438 in the other direction. About 70% of the February group (9,871 of 14,193) are users whose first later non-cancellation transaction was dated before their expiration (negative gap, early renewal); among all early renewers 11.00% (February) and 14.17% (March) are churn in the official file, against 0.2–2% for renewals within 0 to 29 days after expiration. Renewals with a zero payment explain only a small part (4.5% and 5.6% of those groups against 0.2% and 0.1% in the agreeing group). (3) The rebuilt churn rate of the shared users is 3.95% (February) and 4.93% (March) while the official labels of the same users give 5.54% and 7.26%.
-- Findings versus hypotheses: Verified (exploratory): the numbers above. Hypotheses (unverified): the official selection includes users with any expiration in the month, not only the last one; for early renewers the official label may be measured against a later expiration, so some early renewers who then lapse are labeled churn. Neither is in the demonstration script.
-- Decisions and rationale: Rebuilt rates and official rates describe different populations and label treatments and must not be compared directly. Rebuilt cohorts are used for trends across months and are described as "rebuilt with the demonstration rule"; the official labels remain the reference for the February and March 2017 windows. The early-renewer treatment is an open question to resolve before the modeling stage.
-- Blockers / dependencies: None.
-- Next action: see "At a glance".
-- Commit or pull request: None.
-
-### 2026-10-06 (update 13) — Cross-month cohort analysis published
-
-- Date: 2026-10-06
-- Phase and status: Stage A: audit, label check, and monthly cohorts complete; feature windows and cutoffs next.
-- Changes / artifacts: `src/churn_labels.py` (label rebuild, last expirations, looser population rule), `tests/test_churn_labels.py` (31 tests together with the existing ones pass), `notebooks/02_population_and_churn.ipynb` (executed from a fresh kernel by the user, 6 of 6 code cells, no errors), `reports/figures/churn_rate_by_month.png` and `reports/figures/spike_months_by_expiration_day.png` (exported from the notebook outputs), `requirements.txt` (matplotlib, pyarrow), README sections "Churn over time" and updated status, repository map, and reproduction steps.
-- Validation performed and results: Notebook outputs reproduce the exploratory figures (February 2017: 879,537 users rebuilt, 88.57% of the official users covered, 98.36% agreement; March 2017: 886,500, 88.79%, 95.73%; looser rule 99.06% and 98.68%; monthly cohorts 393 thousand to 880 thousand users with a churn label rate of 3.7% to 19.2%). One finding-table sentence quoted figures that were not visible in the outputs and was replaced by figures taken from the shown tables. Machine paths and user identifiers are absent from the notebook.
-- Findings versus hypotheses: See update 12 and 12b; the campaign or trial reading of the batch cohorts and the early-renewer labeling remain hypotheses.
-- Decisions and rationale: Publish the analysis with its limits stated in the README (rebuilt and official rates are different populations; labels rebuilt only up to February 2017).
-- Blockers / dependencies: None.
-- Next action: see "At a glance".
-- Commit or pull request: Two commits on `main` (label module and tests; notebook, figures, README, plan), pushed.
-
-### 2026-10-06 (update 14) — Prediction setup designed
-
-- Date: 2026-10-06
-- Phase and status: Stage A definitions complete (design); stage B next.
-- Changes / artifacts: Added `docs/prediction_design.md` (unit of prediction, cutoff at the end of the previous month, feature windows by family, leakage controls with a purge rule, time-ordered splits, evaluation at capacity K) and updated the README status row and docs map.
-- Validation performed and results (full data, exploratory, read-only): Lead time from the cutoff to the last expiration over the analysis months 2015-07 to 2017-02: 22.0% of user-months have 1–7 days, 22.0% 8–14, 22.2% 15–21, 33.8% 22–31 (churn label rate 10.42%, 6.31%, 6.31%, 6.79%; the first band includes the batch cohorts). In the February 2017 cohort (879,537 users) 68.8% have a listening log in the last 7 days before the cutoff, 77.1% in 30 and 80.5% in 90, so 19.5% have none in 90 days; churn label rate by listening days in the last 30: none 2.76%, 1–5 days 6.10%, 6–15 days 5.55%, 16–25 days 3.80%, 26–30 days 2.36%. Transaction history at the cutoff: median 15 transactions, 8.9% with a first transaction under 90 days earlier, 7.7% with at most two transactions.
-- Findings versus hypotheses: Verified (exploratory): the figures above; the descriptive pattern by listening days is not a causal claim and has been checked for one cohort only. Hypothesis: users without logs form a distinct low-churn group (possibly a different user type); not investigated.
-- Decisions and rationale: Features use data up to T only; all splits are by time; training months for predicting month M are M-2 or earlier (labels complete about 30 days after the end of the month); the official March 2017 file is an external check reported separately; `has_member_profile` is not a feature until shown to be knowable at T; missing behavior is flagged and never treated as zero listening.
-- Blockers / dependencies: None.
-- Next action: see "At a glance".
-- Commit or pull request: None yet.
-
-### 2026-10-06 (update 15) — PostgreSQL layer built and reconciled
-
-- Date: 2026-10-06
-- Phase and status: Stage B (relational analytics) started; database built, SQL analyses next.
-- Changes / artifacts: `sql/postgres/` (schemas `staging` and `analytics`, text staging tables, `\copy` load, typed analytics tables with keys and indexes, `run_all.sh`), `sql/quality/01_reconcile_postgres.sql`, `docs/data_model.md` (schemas, logical ER diagram, key coverage), README status row and repository map.
-- Validation performed and results (full data): all 5 row counts (staging, analytics, audit) and 12 audit figures reproduced from the typed tables, status OK; database about 9.7 GB (analytics 6,408 MB, staging 3,272 MB). Key coverage: transaction users found in members 81.95%, labeled users in members 88.84%, labeled users in transactions 100%.
-- Findings versus hypotheses: Verified: the figures above. No foreign keys on `msno` because unmatched users exist; this follows the rule not to drop records for integrity.
-- Decisions and rationale: two layers (raw text, typed analytics); `user_logs` stays in Parquet (about 410 million rows, PySpark in stage C) and only user-by-month summaries will be loaded.
-- Blockers / dependencies: None.
-- Next action: SQL analyses in `sql/analysis/` (monthly churn, cohort retention, renewal gap, plan mix).
-- Commit or pull request: None yet.
-
-### 2026-10-07 (update 16) — First SQL analysis block
-
-- Date: 2026-10-07
-- Phase and status: Stage B (relational analytics): first five SQL analyses run by the owner in pgAdmin; monthly churn and cohort retention added (CTEs, window functions).
-- Changes / artifacts: `sql/analysis/01` to `05` (user history, expiring users by month, last-expiration population, official label rate with profile coverage, plan mix with auto-renew), `06_monthly_churn.sql`, `07_cohort_retention.sql`, `reports/sql_analysis.md`; the PostgreSQL layer was committed and pushed (e61c57c).
-- Validation performed and results (full data): official churn label rate 6.39% (v1, 992,931 users) and 8.99% (v2, 970,960), profile missing for 11.66% and 11.33%; February 2017 last-expiration population 883,727 in SQL against 879,537 in the Python rebuild (0.48% difference); 0-day plan count 870,124 equals the audit; plan mix 87.97% 30-day, 5.07% over 30, 4.04% 0-day, 2.91% under 30; simplified SQL monthly churn 4.29% to 18.53% over 2015-07..2017-02 (2017-02: 4.45% against 3.95% in Python); 2016 cohort retention drops about 20-35 points between month 0 and month 1, then levels off near 55-66%.
-- Findings versus hypotheses: Verified: the figures above. Hypothesis: the 4,190-user difference comes from ordering details (plan signature, cancellations); not isolated yet.
-- Decisions and rationale: results are published as SQL files plus a text report, not screenshots; the user-history query prints no identifier.
-- Blockers / dependencies: None.
-- Next action: renewal-gap distribution and plan-type split of cohort retention; then stage C features.
-- Commit or pull request: None yet.
-
-### 2026-10-10 (update 17) — Stage B closed: renewal gap and retention by plan
-
-- Date: 2026-10-10
-- Phase and status: Stage B (relational analytics) complete; stage C (behavioral features) next.
-- Changes / artifacts: `sql/analysis/08_renewal_gap.sql`, `09_cohort_retention_by_plan.sql`, sections 8 and 9 of `reports/sql_analysis.md`, README "What the SQL analysis found" and status row.
-- Validation performed and results (full data): renewal gaps for 18.7 million expirations (2015-02..2017-01): early 23.73%, on expiry day 48.69%, 1-7 days 16.16%, 8-14 days 1.01%, 15-29 days 1.01%, 30+ days 3.30%, no later transaction 6.10%. Cohort retention 2016-01..06 (354,741 users; the plan groups sum to the 354,741 of update 16): first plan 30 days 100.0 -> 70.6% after one month, 62.4% after six; over 30 days 99.7% after one month, 82.8% after six; under 30 days 10.8% after one month.
-- Findings versus hypotheses: Verified: the figures; the month 0-1 retention drop comes from 30-day first plans (confirms the earlier hypothesis that plan length matters). Hypotheses: the 30-day threshold is insensitive because the 8-29 day band is sparse (to be tested with other thresholds); plan choice reflects user type rather than causing retention.
-- Decisions and rationale: plan length of the first transaction is a feature candidate; early renewals (23.73%) remain the open labeling question.
-- Blockers / dependencies: None.
-- Next action: stage C: summarize user logs (DuckDB) into user-by-month features respecting the cutoff rules of `docs/prediction_design.md`.
-- Commit or pull request: None yet.
-
-### 2026-10-10 (update 18) — Optional Streamlit app added to the roadmap
-
-- Date: 2026-10-10
-- Phase and status: Planning only; stage B committed and pushed (4df2d05).
-- Changes / artifacts: Stage D row and extension list in this plan.
-- Decisions and rationale: Streamlit app is an optional extension after stage E, fed by aggregated tables only; it gives hiring managers a clickable link, which a Power BI desktop file does not. Lowest priority.
-- Next action: see "At a glance" (stage C).
-- Commit or pull request: None yet.
-
-### 2026-10-10 (update 19) — dbt added to stage D
-
-- Date: 2026-10-10
-- Phase and status: Planning only.
-- Changes / artifacts: Phase 5 and the stage D row now describe the marts as a dbt project with staging and mart models and data tests (details in Phase 5).
-- Decisions and rationale: dbt shows modeling as tested, versioned code rather than single queries and reuses the audit results as tests; develop locally first to save the Snowflake trial; relationships tests are warnings because unmatched users are kept; no claim before models and passing tests exist.
-- Next action: see "At a glance" (stage C).
-- Commit or pull request: None yet.
-
-### 2026-10-11 (update 20) — Stage C started: listening features for February 2017
-
-- Date: 2026-10-11
-- Phase and status: Stage C (behavioral features) in progress; one month done, all months next.
-- Changes / artifacts: `src/behavior_features.py` (`listening_features`: active days, plays, valid seconds, unique songs, completed share over 7/14/30/60/90-day windows, days since last log, two trends, flags), `tests/test_behavior_features.py` (10 tests pass), `notebooks/03_behavioral_features.ipynb` (run by the owner; sections 0-3 executed).
-- Validation performed and results (full data, February 2017 population of 879,537 users, cutoff 2017-01-31): users with a log in the last 7, 30, 90 days 68.85%, 77.11%, 80.48% (the exploratory figures were 68.8%, 77.1%, 80.5%); 171,705 users (19.52%) with no log in 90 days; 0.46% with an invalid `total_secs` day in the window; among 707,832 users with a log: median 17 listening days and 406 plays in 30 days. Churn label rate by listening days in the last 30: none 2.76% (201,314 users), 1-5 days 6.10%, 6-15 5.55%, 16-25 3.80%, 26-30 2.36%, identical to the exploratory result.
-- Findings versus hypotheses: Verified: the figures above (one month, descriptive). Hypothesis: users with no listening and a low churn label rate are a different user type; not examined.
-- Decisions and rationale: feature logic lives in `src/` with tests so every cutoff reuses it; missing listening is flagged, not zero; invalid seconds are missing with a flag.
-- Blockers / dependencies: The user-log Parquet files are on the external drive (must be connected).
-- Next action: subscription-history features (C3), a leakage check, and all months (C4); split the no-listening group by plan, auto-renew, and tenure.
-- Commit or pull request: None yet.
-
-### 2026-10-11 (update 21) — Subscription and profile features for February 2017
-
-- Date: 2026-10-11
-- Phase and status: Stage C (behavioral features) in progress: listening features (update 20) and subscription/profile features done for one month.
-- Changes / artifacts: `src/subscription_features.py` (`subscription_features`, `profile_features`), `tests/test_subscription_features.py` (8 tests; 49 tests pass in total), `notebooks/03_behavioral_features.ipynb` sections 5-7 (run by the owner).
-- Validation performed and results (full data, February 2017, 879,537 users, cutoff 2017-01-31): median 15 transactions, 8.89% first transaction under 90 days before the cutoff, 7.70% with at most two transactions (match the design document); 27.52% have their first transaction in the first month of data (tenure truncated); lead time bands 22.77% / 22.10% / 23.00% / 32.14%. Churn label rate (rebuilt labels) by last auto-renew: off 21.39% (104,532 users), on 1.60% (775,005); by transactions so far: 15.01% (1-2), 6.53%, 4.12%, 2.35%, 1.19% (25+); cancellations in the last 90 days 9.36% against 3.78%; last plan over 30 days 27.06% (20,740), 1-29 days 48.73% (1,849), 30 days 3.30%; zero last payment 39.19% (4,021); lead time 4.18% / 4.09% / 3.98% / 3.68%. Group sizes add up to 879,537 in every table.
-- Findings versus hypotheses: Verified (one month, descriptive): the figures above. Auto-renew off holds about 64% of the churners in about 12% of users (computed from rounded rates), so "no auto-renew" is the baseline rule a model must beat. Hypothesis: the small high-churn groups (plans under 30 days, zero payment) reflect trials or promotions; not examined.
-- Decisions and rationale: tenure is flagged as left-censored; `has_member_profile` stays a diagnostic, not a feature; lead time is reported as a dimension of evaluation because it hardly separates churners.
-- Blockers / dependencies: None.
-- Next action: leakage check and all target months (C4), writing the feature table; then examine the no-listening group; stage D.
-- Commit or pull request: None yet.
-
-### 2026-10-12 (update 22) — Feature table for all months and leakage checks
-
-- Date: 2026-10-12
-- Phase and status: Stage C (behavioral features): feature table built for all target months and checked for leakage; notebook sections 8-9 run by the owner (outputs match the script run).
-- Changes / artifacts: `src/build_features.py` (one Parquet file per target month, 63 columns, in the git-ignored `data/processed/features/`; 2015-07 to 2017-02 with rebuilt labels, 2017-03 with the official labels), `src/leakage_checks.py` (cutoff invariance, single-feature AUC alert, purge rule, one row per user and month), `tests/test_leakage_checks.py`; fixes in `src/subscription_features.py` (deterministic tie order); 58 tests pass in total; `notebooks/03_behavioral_features.ipynb` section 8.
-- Validation performed and results (full data, run by Claude as a script; the notebook reproduces it): the first invariance run found 1,341 (February 2017) and 1,364 (March 2016) differing values, all of them explained and none a leak: `secs_30/60/90` differed by about 1e-15 relative (floating-point summation order; comparison changed to a relative tolerance) and one user's `n_plan_changes` depended on the order of three transactions with the same date and expiration (a deterministic tie order was added). After the fixes and a full rebuild, both months show 0 differing values in all 51 features. Population counts match the labels of every month, no duplicate (user, month) rows, no missing labels; churn label rate per month 3.82% to 17.97% (rebuilt) and 8.99% (2017-03, official). Highest single-feature AUC 0.769 (transactions in the last 90 days), then 0.734 (all transactions), 0.694 (auto-renew), 0.669 (tenure), 0.627 (listening days in 90): no feature near the 0.90 alert (sample of 120,000 users per month, 2.4 million rows). The planned expanding-window splits satisfy the purge rule (training months at most M-2) for validation months 2016-07 to 2017-02.
-- Findings versus hypotheses: Verified: the checks above. A passing check shows no use of post-cutoff data in the checked features at two cutoffs; it does not cover the member profile snapshot (a 2017-11 file), which is handled by the registration-date rule and the exclusion of `has_member_profile`. Single-feature AUC is a leakage alert, not model performance.
-- Decisions and rationale: ties in transaction order are broken deterministically; sums are compared with a relative tolerance; invariance is run on two cutoffs (2017-02, 2016-03) because each run takes minutes.
-- Blockers / dependencies: The external drive must be connected to rebuild the features.
-- Next action: owner runs notebook section 8; then examine the no-listening group, and start stage D (dbt models and tests on the feature table) or stage E (baselines).
-- Commit or pull request: None yet.
-
-### 2026-10-12 (update 23) — Master plan brought up to date
-
-- Date: 2026-10-12
-- Phase and status: Planning and bookkeeping; no new analysis.
-- Changes / artifacts: Rewrote "At a glance" (stage A complete, B complete, C largely done, current findings and open items, next action: stage E), and the progress tracker (phases 1 and 2 complete, 3 and 4 in progress, 8 next). Last commit before this update: 48e0741.
-- Decisions and rationale: Stage C stays "in progress" because the Databricks/PySpark implementation is part of its plan and not done; phase 3 stays "in progress" until `docs/metric_definitions.md` exists.
-- Next action: see "At a glance".
-- Commit or pull request: None yet.
-
-### 2026-10-13 (update 24) — Stage E: baselines, models, evaluation, and an independent review
-
-- Date: 2026-10-13
-- Phase and status: Stage E (prediction and prioritization), first pass complete.
-- Changes / artifacts: `src/evaluation.py` (precision, recall and lift at capacity K with a reproducible random tie-break, band metrics, AUC, Brier, calibration), `src/modeling.py` (feature matrix, three one-feature rules, logistic regression, gradient boosting with fixed settings), `src/run_experiments.py`, `src/run_ablation.py`, `src/model_report.py`, saved tables in `reports/model_results/`, `reports/model_results.md`, `reports/figures/recall_at_capacity.png`, `docs/model_card.md`, `notebooks/04_model_evaluation.ipynb` (reads the saved tables; not yet run by the owner), `scikit-learn` in `requirements.txt`; purge rule made date-based in `src/leakage_checks.py` and `docs/prediction_design.md`; 74 tests pass.
-- Independent review: a separate read-only subagent reviewed stages C and E (no direct use of data from after the cutoff found). Actions: purge rule corrected for March (training for 2017-03 stops at 2016-12 because January's last labels complete only on 2017-03-02); assertions added for row counts and the purge rule; a crash on users without history (2,524 official March users, churn label rate 54.7%) fixed (my first fix missed one rule; the external run failed once and was rerun); top-K size made robust to float rounding; a profile ablation run for the concern that missing profiles leak `has_member_profile`. Open from the review: overlap of the two transaction releases not quantified; docs now state that a window whose seconds are all invalid has `secs = 0` plus a flag.
-- Validation performed and results (full data; evaluation on every user of the month, training on a 100,000-user sample per month): validation months 2016-07 to 2016-12, gradient boosting mean recall at 10% capacity 71.6%, logistic regression 70.9%, rule "no auto-renew" 49.2%, "few transactions" 46.0%, "few listening days" 10.7%; AUC 0.899, 0.898, 0.809, 0.774, 0.589. Final test (rebuilt labels): 2017-01 recall at 10% 71.9% (gradient boosting), 71.1% (logistic), 52.5% (rule), AUC 0.885; 2017-02 68.1%, 67.7%, 54.2%, AUC 0.865; lift at 5% 9.8 and 9.7. External month 2017-03 (official labels, churn 8.99%): recall at 5/10/20%: gradient boosting 27.9/44.9/65.6, logistic 18.7/33.9/65.7, rule 22.9/45.9/58.4; AUC 0.810, 0.773, 0.733. Feature families (gradient boosting, recall at 10% Jan/Feb/Mar): all 71.9/68.1/44.9, no listening 70.8/66.9/52.0, subscription only 70.7/66.8/52.6, listening only 30.0/27.6/16.4. Profile columns: mean validation recall at 10% 71.6% with and without them. Permutation importance (2017-01): last payment method 0.093 AUC drop, then days since the last transaction 0.012. Calibration good in January and February (top decile 32.9% predicted against 32.4% observed; 30.2% against 26.9%), under-predicting in March (ninth decile 11.4% against 18.6%).
-- Findings versus hypotheses: Verified: the figures above. The 108,802 official March users outside the rebuilt population rule (churn 22.7%; they form the missing lead-time band) explain part of the weaker March result; the rest is attributed to the early-renewer labeling (hypothesis, not tested). Listening features add little to the subscription record but carry signal alone (hypothesis: they are largely redundant with recent transaction activity).
-- Decisions and rationale: settings fixed in advance (no tuning), so test months never choose anything; March reported separately; rules are the baselines to beat; no claim about response to an offer or about financial return.
-- Blockers / dependencies: None.
-- Next action: see "At a glance".
-- Commit or pull request: None yet.
-
-### 2026-10-12 (update 25) — Rebuilt versus official labels investigated
-
-- Date: 2026-10-12
-- Phase and status: Stage E follow-up (read-only investigation; documentation updated, no model changed).
-- Changes / artifacts: new section "Rebuilt labels versus the official label files" in `docs/churn_definition.md`; the external-check section of `reports/model_results.md` rewritten as a decomposition; README, `docs/model_card.md`, and `docs/prediction_design.md` aligned.
-- Validation performed and results (full data, exploratory): (1) The supplied Scala labeller uses only January 2017 transactions as history; rebuilding February with that history gives 86.22% coverage of the official users and 98.77% agreement (2015 history: 88.57%, 98.36%), so it does not explain the official population; the rule "any expiration in the month" covers 99.06% (February) and 98.68% (March). (2) March: 970,960 official users, of which 862,158 inside the rebuilt population (churn 7.26%, 71.7% of the churners) and 108,802 outside (last expiration after March 85,465, churn 16.6%; before March 20,813, 43.8%; no history 2,524, 54.7%; together 28.3% of the churners). Rebuilt March labels are not reliable because renewals after 2017-03-31 are invisible (right censoring); the population itself is complete. (3) Early renewals: of 14,193 February users labeled renewed by the rebuild and churn by the official file, 9,871 have a negative gap. Measuring the gap to the first non-cancellation transaction dated on or after the (cancellation-adjusted) expiration raises agreement with the official February labels from 98.36% to 99.25% (disagreements 14,392 to 6,567; with January-only history 99.32%). (4) Model on the same 879,478 February users, recall at 10% capacity: rebuilt labels 68.1% (rule 54.0%), official labels 60.8% (rule 52.6%); the 14,193 disputed users have a mean predicted churn probability of 12.8% against 4.1% overall. March with official labels: 55.3% against 52.8% inside the rebuilt population, 44.9% against 45.9% overall; the model's AUC outside the population is 0.575 (rule 0.627).
-- Findings versus hypotheses: Verified: the figures above. Supported hypothesis (not proven; about 6,500 February disagreements remain; March cannot be tested): the official files ignore early renewals and measure from the first renewal on or after the expiration, so some continuously subscribed early renewers are labeled churn; the supplied script, read literally, contradicts this. The official files are training labels, not the competition test set (documented; April roster labels are not public).
-- Decisions and rationale: option A: keep the models trained on rebuilt labels and report both label sets side by side; option B (rebuild all months with the official-style rule and retrain, about an hour, not verifiable for March) is deferred.
-- Blockers / dependencies: None.
-- Next action: see "At a glance".
-- Commit or pull request: None yet.
-
-### 2026-10-12 (update 26) — Metric definitions written; lead-time experiment recorded as a stretch goal
-
-- Date: 2026-10-12
-- Phase and status: Phase 3 (definitions and descriptive analysis) complete; stage D next.
-- Changes / artifacts: `docs/metric_definitions.md` (population, label, descriptive SQL, feature, and evaluation metrics, each with grain, denominator, caveat, and where it is computed); stretch goal recorded in the extension list (draft `docs/lead_time_experiment_design.md`, not approved or implemented).
-- Validation performed and results: All figures quoted in the metric definitions were taken from the existing reports and notebooks (879,537 and 993,531 users for February 2017, 992,931 and 970,960 official users, 88.57% and 88.79% inside the rebuilt rule, 87.97% 30-day plans, 3.95% against 6.39% label rate, 4.45% in the simplified SQL); no new analysis.
-- Decisions and rationale: the label rate is defined as a rate within the labeled population, never as platform churn; the simplified SQL churn is for shape only.
-- Blockers / dependencies: dbt is not installed (stage D); installing it changes the Python environment and needs the owner's approval.
-- Next action: stage D, starting with a dbt project verified locally before any Snowflake use.
-- Commit or pull request: None yet.
-
-### 2026-10-12 (update 27) — Stage D started: dbt project built and tested locally
-
-- Date: 2026-10-12
-- Phase and status: Stage D (serving and BI) in progress: the dbt project works on DuckDB; Snowflake and the dashboard are next.
-- Changes / artifacts: `dbt/` (project file, `profiles.yml` without credentials, sources, three staging models `stg_members`, `stg_official_labels`, `stg_transactions`, three marts `mart_user_month_features`, `mart_monthly_churn`, `mart_cohort_retention`, YAML tests (29 generic) and 9 singular tests (38 in all), `README.md`, `requirements.txt`); `.gitignore` for dbt build artifacts. dbt-core 1.12.5 and dbt-duckdb 1.11.0 were installed by the owner in a separate conda environment (`kkbox-dbt`, Python 3.12), apart from the project environment.
-- Validation performed and results (full data): `dbt run` builds the 6 models in 18 seconds; `dbt test`: 36 of 38 tests pass and 2 warn by design (transactions and the feature mart have no member profile for 2,783,896 transaction rows and 1,965,406 user-months; the project keeps them). The tests reconcile source row counts with the audit (6,769,473 members; 992,931 and 970,960 official labels; 21,547,746 and 1,431,009 transactions), the churn counts in the official files (63,471 and 87,330), the February 2017 population and churn label rate (879,537; 3.95%), and check the leakage controls (cutoff equals the last day of the previous month, no negative "days since" values, one row per user and month). The marts reproduce earlier results: churn label rate 21.39% for auto-renew off against 1.60% for on (February 2017), 8.99% for the official March 2017 file, and retention by first plan (70.6% after one month for 30-day plans, 99.7% over 30 days, 10.8% under 30 days), identical to the PostgreSQL analysis.
-- Findings versus hypotheses: Verified: the figures above. The monthly mart shows that the churn label rate of users with auto-renew off varies from 19.6% to 45.2% across months (not investigated).
-- Decisions and rationale: dbt only transforms; the log scans and feature building stay in `src/` (DuckDB, later PySpark), the marts are built on the finished feature files; the relationship tests warn instead of failing because unmatched users are kept; the Snowflake target will read secrets from environment variables and no credentials are stored in the repository.
-- Blockers / dependencies: A Snowflake account (created by the owner; start the trial only when ready, it is time-limited) is needed for the last step; Power BI Desktop is Windows-only.
-- Next action: Snowflake target and load (when the owner has an account), the dashboard; or stage F in the meantime.
-- Commit or pull request: None yet.
+Do not mark planned tasks complete or describe an unexecuted notebook as verified; if evidence changes the plan, update the relevant sections instead of keeping contradictory plans.
+
+### Milestones
+
+| Date | Milestone | Key evidence | Documented in |
+|---|---|---|---|
+| 2026-09-28 | Audit initialized; official Scala labeller read | Rule: renewal gap < 30 days is renewal; cancellation is not churn by itself | `docs/churn_definition.md` |
+| 2026-10-02 to 05 | Full-data audit of v1 and v2, reusable DuckDB checks | Labels 992,931 / 970,960; members 6,769,473; transactions 21,547,746 + 1,431,009; logs 392,106,543 + 18,396,362; 19 data-quality items | `reports/data_audit.md`, `reports/data_quality_issues.md`, notebook 01 |
+| 2026-10-05 | Release relationships | `transactions_v2` adds 361,187 pre-March rows and shares 7,249 user-date keys with v1 (hypothesis: complementary) | `reports/data_audit.md` |
+| 2026-10-05 to 06 | Label windows and cutoffs verified; labels rebuilt | Cutoff = last day of the previous month fits best; 98.4% / 95.7% agreement (Feb / Mar 2017); 25 monthly cohorts, churn 3.7% to 19.2%; batch expiry dates drive spikes | `src/churn_labels.py`, notebook 02 |
+| 2026-10-06 | Population and rate differences explained | The rule "any expiration in the month" covers 99.06% / 98.68% of the official users; early renewers are labeled churn 11% to 14% of the time | notebook 02, `docs/churn_definition.md` |
+| 2026-10-06 | Prediction setup designed | Unit, cutoff, feature windows, purge rule, splits, evaluation at K = 5/10/20% | `docs/prediction_design.md` |
+| 2026-10-06 | PostgreSQL built and reconciled | About 9.7 GB; key coverage 81.95% (transactions to members), 88.84% (labels to members), 100% (labels to transactions) | `sql/postgres/`, `docs/data_model.md` |
+| 2026-10-07 to 10 | Nine SQL analyses; stage B complete | Official label rates 6.39% / 8.99%; monthly churn 4.29% to 18.53%; 88.6% of renewals within a week of expiry; 30-day-plan retention 100% to 70.6% after one month | `reports/sql_analysis.md` |
+| 2026-10-10 | dbt added to stage D; Streamlit app optional | | Section 1 |
+| 2026-10-11 to 12 | Monthly feature table and leakage checks | 63 columns, 21 months; 0 changed values when post-cutoff data is removed; highest single-feature AUC 0.77 | notebook 03, `docs/feature_dictionary.md` |
+| 2026-10-12 to 13 | Stage E: baselines, models, independent review, ablation, model card | Recall at 10% capacity 71.9% / 68.1% (gradient boosting) against 52.5% / 54.2% (auto-renew rule); review led to five fixes | `reports/model_results.md`, `docs/model_card.md`, notebook 04 |
+| 2026-10-12 | Rebuilt versus official labels investigated | The supplied script uses January history only and does not explain the files; ignoring early renewals raises February agreement from 98.36% to 99.25%; recall at 10%: 68.1% (rebuilt labels) to 60.8% (official, February) to 55.3% (March, inside the rebuilt population) to 44.9% (March, all users) | `docs/churn_definition.md`, `reports/model_results.md` |
+| 2026-10-12 | Metric definitions written; lead-time experiment recorded as a stretch goal | | `docs/metric_definitions.md` |
+| 2026-10-12 | dbt project built and tested locally | 6 models; 38 tests, 36 pass and 2 warn by design; marts reproduce the earlier results; 65 columns documented | `dbt/README.md` |
+| 2026-10-13 | Plan condensed; README brought up to date | | this file |

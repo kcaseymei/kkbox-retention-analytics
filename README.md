@@ -4,13 +4,23 @@ An end-to-end retention case study on the [WSDM – KKBox Churn Prediction Chall
 
 **Question:** Which behavioral signals appear before a KKBox subscriber churns, how early do they appear, and whom should be prioritized for intervention at a limited operational capacity?
 
+## Key results
+
+Full-data work on two data releases (about 444 million rows), with every figure reproducible from this repository.
+
+- **Setup.** Churn labels were rebuilt from the transactions (98.4% agreement with the official February 2017 labels on shared users). Models see only what was known on the last day of the month before the expiry month, and are tested on later months.
+- **Prioritization at limited capacity.** On the held-out months January and February 2017, contacting the 10% of expiring users ranked highest by gradient boosting reaches **71.9% and 68.1% of the churners**, against 52.5% and 54.2% for the best simple rule ("last transaction has auto-renew off") and 10% for a random list.
+- **An honest caveat.** With the official labels the lead over that rule shrinks (60.8% against 52.6% in February) and in March 2017 it disappears at 10% capacity, because the official population includes 11.2% of users the model was not built for and the official labels seem to treat early renewals differently. The report quantifies each step.
+- **Where the signal is.** Subscription records (auto-renew, number of transactions, recent cancellations) carry most of it; listening behavior has signal alone but adds only about 1 point on top.
+- **Not done yet.** Intervention and experiment design (Stage F), the Snowflake and dashboard parts of Stage D, and the Databricks / PySpark version of the log features.
+
 ## Business scenario and decision
 
 **Scenario (hypothetical).** A subscription music service sees renewals slip. Its retention team can contact only a fraction of the subscribers whose membership expires each month, with a renewal reminder, a payment fix, or an offer. The data is real (KKBox, 2017); the team, its capacity, and any costs are assumptions made for this case study.
 
 **Decision.** Which expiring subscribers should the team contact first, how early can they be identified, and what action should be tested?
 
-**Constraint: capacity K**, the share of each month's expiring subscribers the team can reach. The real capacity is unknown, so the analysis will report **K = 5%, 10%, and 20%**. For reference, in the March 2017 window (970,960 labeled users, 87,330 churn labels) a randomly chosen list reaches only K% of the churners: about 4,367 at 5%, 8,733 at 10%, and 17,466 at 20%. A useful model must beat this at the same K.
+**Constraint: capacity K**, the share of each month's expiring subscribers the team can reach. The real capacity is unknown, so the analysis reports **K = 5%, 10%, and 20%**. For reference, in the March 2017 window (970,960 labeled users, 87,330 churn labels) a randomly chosen list reaches only K% of the churners: about 4,367 at 5%, 8,733 at 10%, and 17,466 at 20%. A useful model must beat this at the same K.
 
 **Timeline.** Predict at the end of the month before the expiry month, act during the expiry month, and learn the outcome 30 days after expiry. The lead time therefore ranges from a day to about a month depending on the expiry day. The prediction cutoff is supported by a first check against the official labels (exploratory).
 
@@ -18,11 +28,11 @@ An end-to-end retention case study on the [WSDM – KKBox Churn Prediction Chall
 
 **How it will be judged.** Not by accuracy, which is about 91% for a list that predicts nobody churns, but by precision, recall, and lift at K on later months, plus calibration, with time-ordered validation.
 
-**What it will not claim.** No causal lift and no financial return without observed experimental evidence; any scenario estimate states its assumptions. The prediction and experiment parts are planned (Stages E and F), not done.
+**What it will not claim.** No causal lift and no financial return without observed experimental evidence; any scenario estimate states its assumptions. The prediction part (Stage E) is done; the experiment part (Stage F) is a design to be written, not a result.
 
 ## Status
 
-The first stage, a **full-data audit of both data releases (about 444 million rows)**, is complete. Later stages are planned and are not implemented yet.
+Stages A (audit and definitions), B (PostgreSQL and SQL analysis) and E (prediction) are complete, Stage C (features) is built with DuckDB, and Stage D (dbt) is built and tested locally. Snowflake, the dashboard, the Databricks / PySpark version of the features, and Stage F (recommendations) are planned and not implemented yet.
 
 | Stage | Work | Status |
 |---|---|---|
@@ -33,7 +43,7 @@ The first stage, a **full-data audit of both data releases (about 444 million ro
 | E. Prediction | Baseline plus one stronger model with time-aware validation, top-k evaluation | **Evaluated** on three held-out months ([results](reports/model_results.md), [model card](docs/model_card.md)) |
 | F. Recommendations | Intervention hypotheses, experiment design, final case study | Planned |
 
-Each tool is introduced only when the work needs it: Python and pandas for analysis, **DuckDB and Parquet** to audit the 392-million-row listening logs on a laptop, and later PostgreSQL for relational modeling, Databricks / PySpark for the large behavioral workload, Snowflake to serve curated marts, and Power BI for executive retention monitoring.
+Each tool is introduced only when the work needs it. Used so far: Python and pandas for analysis, **DuckDB and Parquet** to audit and aggregate the 392-million-row listening logs on a laptop, **PostgreSQL** for relational modeling and SQL analysis, scikit-learn for the models, and **dbt** (on DuckDB) for tested marts. Planned: Databricks / PySpark for the large behavioral workload, Snowflake to serve the dbt marts, and a dashboard for retention monitoring.
 
 ## What the audit found
 
