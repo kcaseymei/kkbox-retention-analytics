@@ -55,7 +55,7 @@ All figures are full-data results (every row), reproduced in [the audit notebook
 - **Profile data is sparse.** 65% of members have no gender, 67% have an age of zero, and about 11–12% of labeled users have no member profile. Users without a profile have a lower label rate (5.35% against 9.46% in `train_v2`), so dropping them would change the population.
 - **Behavior data has gaps and impossible values.** About 12% of labeled and test users have no listening log at all, and `total_secs` contains negative and absurdly large values (up to about 9.2 quadrillion seconds) in roughly 0.05% of rows, enough to ruin any sum or average.
 
-Nineteen data-quality items are tracked in the [issue register](reports/data_quality_issues.md) with evidence, risk, and a planned treatment. **No treatment has been applied yet**; source data is never modified.
+Nineteen data-quality items are tracked in the [issue register](reports/data_quality_issues.md) with evidence, risk, and a planned treatment. Source data is never modified; treatments are applied downstream and recorded (for example, implausible `total_secs` values are ignored and flagged when the listening features are built).
 
 ## What the models found
 
@@ -66,6 +66,7 @@ Time-ordered validation (training stops before the month's labels are complete),
 - **On the rebuilt labels the models beat the simple rule.** Contacting 10% of the expiring users reaches 71.9% (January 2017) and 68.1% (February 2017) of the churners with the gradient boosting list, against 52.5% and 54.2% for "last transaction has auto-renew off" and 10% for a random list.
 - **On the official labels the advantage over the simple rule shrinks.** On the same 879,478 February users the gradient boosting list reaches 68.1% of the churners at 10% capacity with the rebuilt labels and 60.8% with the official labels (the auto-renew rule: 54.0% and 52.6%); the official labels probably count some early renewers who kept subscribing as churn. In March 2017 (official labels) the model leads the rule by 2.5 points inside the rebuilt population (55.3% against 52.8%) and ties it overall (44.9% against 45.9%), because 108,802 official users (11.2%, 28% of the churners) fall outside that population and the model has no skill on them.
 - **Listening behavior adds little on top of the subscription record:** about 1 point of recall at 10% when added; alone it reaches about three times a random list. Logistic regression is within 1 point of gradient boosting on the rebuilt months.
+- **Two signals, quantified** ([report](reports/retention_signals.md)): users whose listening fell by more than 25% churn about **1.5 times** as often as stable users (median over 21 months, range 0.99 to 2.23; the signal also holds within auto-renewers and within manual renewers). Manual renewers (last transaction with auto-renew off) are only 12% to 18% of the users but account for **63% to 87% of the churners** from mid-2016 on (30% to 57% in 2015).
 - **Limits:** three evaluation months with falling AUC (0.885, 0.865, 0.810); predicted risk is not the likelihood of responding to an offer; no effect of any action is claimed; the official files are training labels, so these results are not Kaggle leaderboard scores.
 
 ## What the SQL analysis found
@@ -82,7 +83,7 @@ Applying the official labeller rules month by month rebuilds 25 monthly cohorts 
 ![Churn label rate by expiration month](reports/figures/churn_rate_by_month.png)
 
 - **Churn is not flat.** The rebuilt churn label rate swings between 3.7% and 19.2%, mostly because of batches of users who share one expiration day: 92,575 users expired on 30 April 2015 and 79.8% of them were labeled churn, in a cohort with far more zero-price plans (15.3% against 0.0% a month earlier). This looks like a campaign or trial cohort (hypothesis; the cause is not in the data).
-- **Rebuilt and official rates are different populations.** The rebuilt rate is lower (3.95% against 6.39% for February 2017) because the official sample includes users that the demonstration rule leaves out and marks more users as churn, many of them early renewers (the reason is an open question). The two must not be compared directly.
+- **Rebuilt and official rates are different populations.** The rebuilt rate is lower (3.95% against 6.39% for February 2017) because the official sample includes users that the demonstration rule leaves out and marks more users as churn, many of them early renewers (the official files seem to ignore early renewals, a supported hypothesis; see the [label comparison](docs/churn_definition.md)). The two must not be compared directly.
 - **Labels can only be rebuilt up to February 2017.** Transactions end on 31 March 2017, so April renewals are invisible; March 2017 uses the official labels.
 
 ## Data
@@ -102,6 +103,16 @@ pip install -r requirements.txt
 python -m unittest discover -s tests
 ```
 
+The later stages run from the repository root (the user-log Parquet files must be available, see step 3):
+
+```bash
+python -m src.build_features        # 63-column feature tables, one Parquet file per target month
+python -m src.run_experiments       # rules and models, time-ordered evaluation (about 25 minutes)
+python -m src.run_ablation          # feature-family comparison
+bash sql/postgres/run_all.sh        # PostgreSQL load (needs a local PostgreSQL and the raw files)
+cd dbt && dbt run --profiles-dir . && dbt test --profiles-dir .   # marts and data tests (separate environment, see dbt/README.md)
+```
+
 ## Repository
 
 | Path | Contents |
@@ -116,7 +127,8 @@ python -m unittest discover -s tests
 | `src/evaluation.py`, `src/modeling.py`, `src/run_experiments.py`, `src/run_ablation.py` | Precision, recall and lift at a capacity K; rules and models; the experiment protocol and the feature-family comparison |
 | `src/churn_labels.py` | The official labeller rules rebuilt in DuckDB (population and 30-day renewal label), tested on the official examples |
 | `src/audit_display.py`, `src/csv_to_parquet.py` | Readable notebook output; verified CSV-to-Parquet conversion |
-| `tests/` | Unit tests for the checks and the display helper |
+| `notebooks/03_behavioral_features.ipynb`, `notebooks/04_model_evaluation.ipynb` | Feature construction with leakage checks; model evaluation tables read from the saved results |
+| `tests/` | 74 unit tests: audit checks, label rebuild, features, leakage checks, evaluation, models |
 | `reports/` | Audit report, the data-quality issue register, SQL analysis, model results (`model_results.md` and saved tables), and the figures used above |
 | `docs/` | Data model (PostgreSQL schemas and key links), data dictionary, churn definition, prediction setup (cutoffs, feature windows, splits), feature dictionary, model card, notes on the official dataset description |
 | `KKBOX_MASTER_PLAN.md` | Scope, roadmap, decisions, and a dated log of every milestone |
@@ -127,7 +139,7 @@ A subscriber churns when no new valid subscription starts within 30 days after t
 
 ## Approach and limits
 
-- Every number is labeled as a full-data result, a documented claim, or a hypothesis; the label windows (February and March 2017) are taken from the official description and are not yet verified from the transactions.
+- Every number is labeled as a full-data result, a documented claim, or a hypothesis; the label windows (February and March 2017) come from the official description and were checked against the transactions (the rebuilt labels reproduce the official ones for 98.4% and 95.7% of the shared users).
 - Findings are descriptive. Historical associations do not establish that an intervention would work; any retention action is a hypothesis to be tested with a randomized experiment.
 - The data is a 2017 snapshot of one subscription service, so results describe this dataset and are not a claim about subscription businesses in general.
-- Predicted churn risk will be kept separate from the likelihood of responding to an intervention.
+- Predicted churn risk is kept separate from the likelihood of responding to an intervention; the experiment that would test an action is a design to be written (Stage F), not a result.

@@ -1,0 +1,9 @@
+renewal_mode,group,users,churn_rate
+auto-renew on,stopped (0 days in the last 30),37808,2.785
+auto-renew on,declined (more than 25%),195529,1.923
+auto-renew on,stable (within 25%),626552,1.106
+auto-renew on,increased (more than 25%),237163,1.375
+manual (auto-renew off),stopped (0 days in the last 30),665,72.632
+manual (auto-renew off),declined (more than 25%),26210,27.028
+manual (auto-renew off),stable (within 25%),117098,11.693
+manual (auto-renew off),increased (more than 25%),40000,21.338
