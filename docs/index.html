@@ -90,17 +90,37 @@ b, strong { font-weight: 600; }
 .wrap { max-width: 1160px; margin: 0 auto; padding: 0 16px 56px; }
 
 /* Top navigation */
-nav.top { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--surface-0) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-nav.top .inner { max-width: 1160px; margin: 0 auto; padding: 0 16px; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+nav.top { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--surface-1) 92%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: 0 1px 12px rgba(0,0,0,.06); }
+nav.top .bar { max-width: 1160px; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; gap: 18px; height: 54px; }
+nav.top .brand { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 14.5px; color: var(--text-primary); white-space: nowrap; letter-spacing: -0.01em; }
+nav.top .brand:hover { text-decoration: none; }
+nav.top .logo { width: 26px; height: 26px; border-radius: 7px; background: var(--series-1); display: grid; place-items: center; }
+nav.top .logo svg { width: 16px; height: 16px; }
+nav.top .inner { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; height: 100%; }
 nav.top .inner::-webkit-scrollbar { display: none; }
-nav.top a { font-size: 13px; color: var(--text-secondary); padding: 13px 10px; white-space: nowrap; border-bottom: 2px solid transparent; }
-nav.top a:hover { color: var(--text-primary); text-decoration: none; }
-nav.top a.on { color: var(--text-primary); border-bottom-color: var(--series-1); }
+nav.top .inner a { font-size: 13px; font-weight: 500; color: var(--text-secondary); padding: 0 10px; white-space: nowrap; display: flex; align-items: center; border-bottom: 2px solid transparent; border-top: 2px solid transparent; }
+nav.top .inner a:hover { color: var(--text-primary); text-decoration: none; }
+nav.top .inner a.on { color: var(--text-primary); border-bottom-color: var(--series-1); }
+nav.top .gh { font-size: 13px; font-weight: 600; color: var(--surface-1); background: var(--text-primary); padding: 6px 12px; border-radius: 7px; white-space: nowrap; }
+nav.top .gh:hover { text-decoration: none; opacity: .88; }
+@media (max-width: 700px) { nav.top .brand > span:last-child, nav.top .gh { display: none; } nav.top .bar { gap: 8px; } }
 
 header { padding: 32px 0 8px; }
 .eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
-h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 6px 0 10px; letter-spacing: -0.02em; }
-.lede { color: var(--text-secondary); max-width: 780px; margin: 0 0 14px; font-size: 16px; }
+h1 { font-size: clamp(28px, 4.4vw, 44px); line-height: 1.1; margin: 8px 0 14px; letter-spacing: -0.025em; }
+.lede { color: var(--text-secondary); margin: 0 0 4px; font-size: 16.5px; line-height: 1.6; }
+.hero { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 32px; align-items: center; margin: 8px 0 18px; }
+h1 .hl { color: var(--series-1); }
+.hero-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+.hero-card .hk { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
+.hero-card .hf { font-size: 12px; color: var(--text-muted); margin-top: 12px; }
+.hb { display: grid; grid-template-columns: 112px 1fr 52px; align-items: center; gap: 10px; margin: 9px 0; font-size: 13px; }
+.hb .n { color: var(--text-secondary); }
+.hb .track { height: 12px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.hb .fill { height: 100%; border-radius: 4px; }
+.hb .v { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; }
+.hb.lead .n, .hb.lead .v { color: var(--text-primary); font-weight: 650; }
+@media (max-width: 860px) { .hero { grid-template-columns: 1fr; gap: 18px; } }
 .links { display: flex; flex-wrap: wrap; gap: 8px; }
 .links a { border: 1px solid var(--border); background: var(--surface-1); padding: 5px 11px; border-radius: 999px; font-size: 13px; color: var(--text-secondary); }
 .links a:hover { color: var(--text-primary); text-decoration: none; border-color: var(--text-muted); }
@@ -254,6 +274,8 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border
 </head>
 <body>
 <nav class="top" aria-label="Sections">
+  <div class="bar">
+  <a class="brand" href="#overview"><span class="logo"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M2 12 6 7l3 3 5-6"/></svg></span><span>KKBox Retention</span></a>
   <div class="inner">
     <a href="#overview">Overview</a>
     <a href="#churn">Where churn comes from</a>
@@ -265,13 +287,24 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border
     <a href="#quality">Data quality</a>
     <a href="#pipeline">Pipeline</a>
   </div>
+  <a class="gh" href="https://github.com/kcaseymei/kkbox-retention-analytics">View code</a>
+  </div>
 </nav>
 
 <div class="wrap">
   <header id="overview">
     <div class="eyebrow">Subscription retention case study · KKBox music streaming (WSDM 2018 dataset)</div>
-    <h1>Who is about to cancel, and who should the retention team contact first?</h1>
-    <p class="lede">About 880,000 subscriptions expire every month. A retention team can only contact a small share of them. This dashboard shows where churn comes from, how well a risk score finds churners at a fixed contact budget, and what should be tested before anything is rolled out.</p>
+    <div class="hero">
+    <div>
+    <h1>Reach <span class="hl">7 in 10</span> churners by contacting <span class="hl">1 in 10</span> subscribers</h1>
+    <p class="lede">About 880,000 subscriptions expire every month, and a retention team can only contact a small share of them. This dashboard shows who is about to cancel, who to contact first at a fixed budget, and what to test before anything is rolled out.</p>
+    </div>
+    <aside class="hero-card" aria-label="Headline result">
+      <div class="hk">Contact the top 10% of expiring users. Share of all churners reached:</div>
+      <div id="hero-bars"></div>
+      <div class="hf">January 2017 (February: <span id="hero-feb"></span>), a held-out month scored only with data known before it began. <a href="#targeting">See targeting →</a></div>
+    </aside>
+    </div>
     <div class="links">
       <a href="https://github.com/kcaseymei/kkbox-retention-analytics">GitHub repository</a>
       <a href="https://github.com/kcaseymei/kkbox-retention-analytics/blob/main/reports/model_results.md">Model results</a>
@@ -682,6 +715,12 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border
     { label: "Churners who renew manually", value: rng(mChurn), note: `They are only ${rng(mUsers)} of users (2016-07 to 2017-02)` },
     { label: "Data audited", value: "≈ 444M rows", note: "19 issues logged; labels rebuilt with a 98.4% match to the official file" },
   ];
+  $("hero-bars").innerHTML = [
+    { n: "Risk score", v: gb[0], c: "--series-1", lead: 1, t: `Jan 2017 ${pct(gb[0])} · Feb ${pct(gb[1])}` },
+    { n: "Simple rule", v: rule[0], c: "--series-2", t: "Auto-renew off on the last transaction" },
+    { n: "Random list", v: 10, c: "--reference", t: "A random list reaches 10% by construction" },
+  ].map((b) => `<div class="hb${b.lead ? " lead" : ""}" title="${b.t}"><span class="n">${b.n}</span><span class="track"><span class="fill" style="display:block;width:${b.v}%;background:${css(b.c)}"></span></span><span class="v">${pct(b.v, 0)}</span></div>`).join("");
+  $("hero-feb").textContent = `${pct(gb[1], 0)} vs ${pct(rule[1], 0)}`;
   $("kpis").innerHTML = kpis.map((k) =>
     `<div class="kpi"><div class="label">${k.label}</div><div class="value">${k.value}</div><div class="note">${k.note}</div></div>`).join("");
 
@@ -866,6 +905,8 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border
     if (e.isIntersecting) links.forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id));
   }), { rootMargin: "-40% 0px -55% 0px" });
   links.forEach((a) => { const s = document.querySelector(a.getAttribute("href")); if (s) io.observe(s); });
+  const atTop = () => { if (scrollY < 200) links.forEach((a, i) => a.classList.toggle("on", i === 0)); };
+  addEventListener("scroll", atTop, { passive: true }); atTop();
 
   // Redraw on resize and theme change so text stays at its real size.
   let t;
