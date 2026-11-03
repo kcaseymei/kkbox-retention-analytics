@@ -22,7 +22,7 @@ Status: **hypotheses to test, not results.** Each recommendation states its targ
 ## 2. Prompt to turn on auto-renew for manual renewers
 
 - **Target.** Users whose last transaction has auto-renew off. They are about 12% to 18% of each month's users.
-- **Evidence.** From July 2016 to February 2017 they account for 63.3% to 87.5% of the churners (a single month, November 2016, reaches 87.5%) and churn at 20% to 45% against 1.4% to 3.5% for auto-renewers. In July 2015 to June 2016 the concentration was lower (30.5% to 57.5% of the churners), so the figure belongs to the later period. Auto-renew status is the strongest single feature in the models.
+- **Evidence.** From July 2016 to February 2017 they account for 63.3% to 87.5% of the churners (a single month, November 2016, reaches 87.5%) and churn at 20% to 45% against 1.4% to 3.5% for auto-renewers. In July 2015 to June 2016 the concentration was lower (30.5% to 57.5% of the churners), so the figure belongs to the later period. Auto-renew status, and the payment method code that largely encodes it, is the strongest signal in the models.
 - **Mechanism (hypothesis).** Turning on auto-renew removes the renewal decision, so the subscription continues unless the user cancels. Manual renewers may differ from auto-renewers in ways the prompt cannot change (price sensitivity, intent to leave), so the observed gap is not the effect of the prompt.
 - **Timing.** Together with the reminder, before the expiration; a prompt at the moment of payment may also work and is outside this design.
 - **Feasibility.** Requires the service to support a one-step auto-renew prompt in its flow, which the data does not show.
