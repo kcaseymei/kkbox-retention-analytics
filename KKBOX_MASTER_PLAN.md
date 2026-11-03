@@ -1,6 +1,6 @@
 # KKBox Retention Analytics — Master Plan
 
-Last updated: 2026-10-13  
+Last updated: 2026-11-02  
 Project owner: Casey Mei  
 Repository: [`kcaseymei/kkbox-retention-analytics`](https://github.com/kcaseymei/kkbox-retention-analytics)  
 Canonical location: `KKBOX_MASTER_PLAN.md` at the repository root
@@ -16,9 +16,9 @@ This is the project's source of truth for scope, status, decisions, and the next
 | A. Audit and definitions | Full-dataset audit (v1 + v2), issue register, churn definition, label rebuild, monthly cohorts, prediction design | **Complete** |
 | B. Relational analytics | PostgreSQL, metric definitions, cohort and renewal SQL | **Complete** (database, 9 SQL analyses, report) |
 | C. Behavioral features | `user_logs` to user × cutoff features | **Built with DuckDB** (21 months, leakage-checked); Databricks/PySpark version planned |
-| D. Serving and BI | Snowflake marts built with dbt, Power BI dashboard (Tableau, Streamlit optional) | **dbt project built and tested locally** on DuckDB; Snowflake and the dashboard next |
+| D. Serving and BI | Snowflake marts built with dbt, Power BI dashboard (Tableau, Streamlit optional) | **dbt project built and tested locally** on DuckDB; **public dashboard live** on GitHub Pages (static HTML from the saved result tables, replaces Power BI for the public version); Snowflake next |
 | E. Prediction and prioritization | Baseline plus one stronger model, top-k evaluation | **Complete (first pass)** |
-| F. Recommendations and write-up | Intervention and experiment design, case study | Planned |
+| F. Recommendations and write-up | Intervention and experiment design, case study | **Designed, not run** (recommendations and experiment design written with stated default assumptions); case-study write-up pending |
 
 **Where the project stands**
 - **Data:** two releases, about 444 million rows audited; 19 data-quality items in `reports/data_quality_issues.md`; churn labels rebuilt from transactions (98.4% agreement with the official February 2017 labels on shared users), reliable up to 2017-02 because renewals after 2017-03-31 are invisible.
@@ -29,7 +29,7 @@ This is the project's source of truth for scope, status, decisions, and the next
 
 **Open questions:** early-renewal labeling in the official files (supported hypothesis, agreement 99.25% in February, about 6,500 disagreements unexplained); why the official sample includes users outside the last-expiration rule; the cause of the batch cohorts and of the March 2016 spike (17.97%); why users with no listening have a low churn label rate; the `total_secs` threshold; whether the two transaction releases overlap harmfully (7,249 shared user-date keys); whether the member profile (a 2017-11 snapshot) is safe to use.
 
-**Next action:** (1) stage F: recommendations and an experiment design that separates risk from response to treatment; (2) quantify the transaction overlap and decide the label target (rebuilt or official-style); (3) stage D: Snowflake target and dashboard (needs an account the owner creates), then the Databricks/PySpark version of the log features. Optional, dropped first if time is short: a Streamlit app on aggregated tables, and the lead-time experiment (`docs/lead_time_experiment_design.md`, draft, not approved).
+**Next action:** (1) quantify the transaction overlap and decide the label target (rebuilt or official-style); (2) stage D: Snowflake target (needs an account the owner creates), then the Databricks/PySpark version of the log features. Optional, dropped first if time is short: a Streamlit app on aggregated tables, and the lead-time experiment (`docs/lead_time_experiment_design.md`, draft, not approved).
 
 ## 1. Purpose and positioning
 
@@ -95,10 +95,10 @@ A phase is complete only when its gate has supporting evidence.
 | 3 Definitions / descriptive analysis | Complete | `docs/churn_definition.md`, `docs/metric_definitions.md`; early-renewal labeling is a supported hypothesis |
 | 4 Databricks | In progress | Features built locally with DuckDB; PySpark version and comparison not done |
 | 5 Snowflake | In progress | dbt project works locally; Snowflake target not set up |
-| 6 Power BI | Planned | Power BI Desktop is Windows-only; Tableau or Streamlit may replace it |
+| 6 Power BI | Replaced for the public version | Power BI Desktop is Windows-only and publish-to-web needs a work account; a static GitHub Pages dashboard (`docs/index.html`, `src/build_dashboard.py`) serves the public link |
 | 7 Tableau | Planned | |
 | 8 Predictive modeling | Complete (first pass) | Open: early-renewer labeling, March population mismatch, release overlap |
-| 9 Recommendations / experiments | Planned | |
+| 9 Recommendations / experiments | Complete (design) | `docs/recommendations.md`, `docs/experiment_design.md`; the experiment is not run and no effect is claimed |
 | 10 Final portfolio | Planned | README kept current; case-study write-up pending |
 
 **Open dependencies:** a Snowflake account and its time-limited trial (start only when ready; credentials come from environment variables and are never committed); a BI route that works on the owner's machine; confirmation of the source terms before publishing anything beyond code and aggregate findings.
@@ -159,4 +159,6 @@ Do not mark planned tasks complete or describe an unexecuted notebook as verifie
 | 2026-10-12 | Metric definitions written; lead-time experiment recorded as a stretch goal | | `docs/metric_definitions.md` |
 | 2026-10-12 | dbt project built and tested locally | 6 models; 38 tests, 36 pass and 2 warn by design; marts reproduce the earlier results; 65 columns documented | `dbt/README.md` |
 | 2026-10-13 | Two retention signals quantified | Users whose listening fell by more than 25% churn about 1.5 times as often as stable users (median over 21 months, range 0.99 to 2.23; also within auto-renew groups); manual renewers are 12% to 18% of the users and 63% to 87% of the churners from 2016-07 to 2017-02 (30% to 57% in 2015) | `reports/retention_signals.md`, `src/signal_analysis.py` |
+| 2026-10-13 | Stage F written: three recommendations and a randomized experiment design (default assumptions: 10% capacity, +2 point effect, 80% power, NT$149 per retained month, NT$1 per contact) | Top-10% list baseline renewal rate 73% (February 2017); 7,550 users per arm (about 8,300 with a buffer); break-even effect 0.67 points; designed, not run | `docs/recommendations.md`, `docs/experiment_design.md` |
 | 2026-10-13 | Plan condensed; README brought up to date | | this file |
+| 2026-11-02 | Public dashboard published on GitHub Pages (decision: static HTML instead of Power BI, because the public link must work without a work account) | Eight sections, each tied to a decision; reads only aggregated tables from `reports/`; regenerated by one script; checked on desktop and phone | https://kcaseymei.github.io/kkbox-retention-analytics/, `docs/index.html`, `src/build_dashboard.py` |

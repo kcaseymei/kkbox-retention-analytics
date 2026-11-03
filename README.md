@@ -2,6 +2,8 @@
 
 An end-to-end retention case study on the [WSDM – KKBox Churn Prediction Challenge](https://www.kaggle.com/competitions/kkbox-churn-prediction-challenge) data: from a full-data quality audit to a defensible retention decision.
 
+**Live dashboard:** [https://kcaseymei.github.io/kkbox-retention-analytics/](https://kcaseymei.github.io/kkbox-retention-analytics/) (churn drivers, targeting at a fixed contact budget, an outreach planner, model monitoring, data quality, and the test plan; aggregated results only).
+
 **Question:** Which behavioral signals appear before a KKBox subscriber churns, how early do they appear, and whom should be prioritized for intervention at a limited operational capacity?
 
 ## Key results
@@ -12,7 +14,8 @@ Full-data work on two data releases (about 444 million rows), with every figure 
 - **Prioritization at limited capacity.** On the held-out months January and February 2017, contacting the 10% of expiring users ranked highest by gradient boosting reaches **71.9% and 68.1% of the churners**, against 52.5% and 54.2% for the best simple rule ("last transaction has auto-renew off") and 10% for a random list.
 - **An honest caveat.** With the official labels the lead over that rule shrinks (60.8% against 52.6% in February) and in March 2017 it disappears at 10% capacity, because the official population includes 11.2% of users the model was not built for and the official labels seem to treat early renewals differently. The report quantifies each step.
 - **Where the signal is.** Subscription records (auto-renew, number of transactions, recent cancellations) carry most of it; listening behavior has signal alone but adds only about 1 point on top.
-- **Not done yet.** Intervention and experiment design (Stage F), the Snowflake and dashboard parts of Stage D, and the Databricks / PySpark version of the log features.
+- **What to do about it.** Three recommendations (a reminder for the top-risk list, an auto-renew prompt for manual renewers, and a lower-priority listening-based outreach) and a randomized experiment design that separates risk from response to treatment, with stated assumptions and sample sizes: [recommendations](docs/recommendations.md), [experiment design](docs/experiment_design.md). Designed, **not run**: no effect of any action is claimed.
+- **Not done yet.** Running the experiment, the Snowflake part of Stage D, and the Databricks / PySpark version of the log features.
 
 ## Business scenario and decision
 
@@ -28,20 +31,20 @@ Full-data work on two data releases (about 444 million rows), with every figure 
 
 **How it will be judged.** Not by accuracy, which is about 91% for a list that predicts nobody churns, but by precision, recall, and lift at K on later months, plus calibration, with time-ordered validation.
 
-**What it will not claim.** No causal lift and no financial return without observed experimental evidence; any scenario estimate states its assumptions. The prediction part (Stage E) is done; the experiment part (Stage F) is a design to be written, not a result.
+**What it will not claim.** No causal lift and no financial return without observed experimental evidence; any scenario estimate states its assumptions. The prediction part (Stage E) is done; the experiment part (Stage F) is a written design ([experiment design](docs/experiment_design.md)), not a result.
 
 ## Status
 
-Stages A (audit and definitions), B (PostgreSQL and SQL analysis) and E (prediction) are complete, Stage C (features) is built with DuckDB, and Stage D (dbt) is built and tested locally. Snowflake, the dashboard, the Databricks / PySpark version of the features, and Stage F (recommendations) are planned and not implemented yet.
+Stages A (audit and definitions), B (PostgreSQL and SQL analysis) and E (prediction) are complete, Stage C (features) is built with DuckDB, and Stage D (dbt) is built and tested locally. Stage F (recommendations and an experiment design) is written but the experiment is not run. A public dashboard is live on GitHub Pages. Snowflake and the Databricks / PySpark version of the features are planned and not implemented yet.
 
 | Stage | Work | Status |
 |---|---|---|
 | A. Audit and definitions | Audit of all source files, issue register, churn definition, label rebuild, monthly cohorts, cutoffs and feature windows | **Audit, label check and monthly cohorts complete**; prediction setup designed ([cutoffs, windows, splits](docs/prediction_design.md)) |
 | B. Relational analytics | PostgreSQL, metric definitions, cohort retention and renewal SQL | **Complete: database built and reconciled with the audit** (staging and analytics schemas, [data model](docs/data_model.md)); [SQL analyses](reports/sql_analysis.md): label rates, plan mix, monthly churn, renewal gap, cohort retention |
 | C. Behavioral features | `user_logs` to user-by-cutoff features | **Built with DuckDB** (63 columns, 21 months, four leakage checks passed, [notebook](notebooks/03_behavioral_features.ipynb)); Databricks / PySpark version planned |
-| D. Serving and BI | Snowflake marts built with dbt, and a Power BI dashboard | **dbt project built and tested locally** on DuckDB (3 staging and 3 mart models, 38 data tests, [details](dbt/README.md)); Snowflake and the dashboard planned |
+| D. Serving and BI | Snowflake marts built with dbt, and a dashboard | **dbt project built and tested locally** on DuckDB (3 staging and 3 mart models, 38 data tests, [details](dbt/README.md)); **[public dashboard](https://kcaseymei.github.io/kkbox-retention-analytics/) live** (static HTML on GitHub Pages, built from the saved result tables); Snowflake planned |
 | E. Prediction | Baseline plus one stronger model with time-aware validation, top-k evaluation | **Evaluated** on three held-out months ([results](reports/model_results.md), [model card](docs/model_card.md)) |
-| F. Recommendations | Intervention hypotheses, experiment design, final case study | Planned |
+| F. Recommendations | Intervention hypotheses, experiment design, final case study | **Designed, not run** ([recommendations](docs/recommendations.md), [experiment design](docs/experiment_design.md)); final case-study write-up pending |
 
 Each tool is introduced only when the work needs it. Used so far: Python and pandas for analysis, **DuckDB and Parquet** to audit and aggregate the 392-million-row listening logs on a laptop, **PostgreSQL** for relational modeling and SQL analysis, scikit-learn for the models, and **dbt** (on DuckDB) for tested marts. Planned: Databricks / PySpark for the large behavioral workload, Snowflake to serve the dbt marts, and a dashboard for retention monitoring.
 
@@ -127,10 +130,11 @@ cd dbt && dbt run --profiles-dir . && dbt test --profiles-dir .   # marts and da
 | `src/evaluation.py`, `src/modeling.py`, `src/run_experiments.py`, `src/run_ablation.py` | Precision, recall and lift at a capacity K; rules and models; the experiment protocol and the feature-family comparison |
 | `src/churn_labels.py` | The official labeller rules rebuilt in DuckDB (population and 30-day renewal label), tested on the official examples |
 | `src/audit_display.py`, `src/csv_to_parquet.py` | Readable notebook output; verified CSV-to-Parquet conversion |
+| `src/build_dashboard.py`, `docs/index.html` | Builds the dashboard data file from the aggregated tables in `reports/`; the dashboard page served by GitHub Pages from `docs/` |
 | `notebooks/03_behavioral_features.ipynb`, `notebooks/04_model_evaluation.ipynb` | Feature construction with leakage checks; model evaluation tables read from the saved results |
 | `tests/` | 74 unit tests: audit checks, label rebuild, features, leakage checks, evaluation, models |
 | `reports/` | Audit report, the data-quality issue register, SQL analysis, model results (`model_results.md` and saved tables), and the figures used above |
-| `docs/` | Data model (PostgreSQL schemas and key links), data dictionary, churn definition, prediction setup (cutoffs, feature windows, splits), feature dictionary, model card, notes on the official dataset description |
+| `docs/` | Data model (PostgreSQL schemas and key links), data dictionary, churn definition, prediction setup (cutoffs, feature windows, splits), feature dictionary, model card, recommendations and experiment design, notes on the official dataset description |
 | `KKBOX_MASTER_PLAN.md` | Scope, roadmap, decisions, and a dated log of every milestone |
 
 ## Churn definition
@@ -142,4 +146,4 @@ A subscriber churns when no new valid subscription starts within 30 days after t
 - Every number is labeled as a full-data result, a documented claim, or a hypothesis; the label windows (February and March 2017) come from the official description and were checked against the transactions (the rebuilt labels reproduce the official ones for 98.4% and 95.7% of the shared users).
 - Findings are descriptive. Historical associations do not establish that an intervention would work; any retention action is a hypothesis to be tested with a randomized experiment.
 - The data is a 2017 snapshot of one subscription service, so results describe this dataset and are not a claim about subscription businesses in general.
-- Predicted churn risk is kept separate from the likelihood of responding to an intervention; the experiment that would test an action is a design to be written (Stage F), not a result.
+- Predicted churn risk is kept separate from the likelihood of responding to an intervention; the experiment that would test an action is a written design (Stage F), not a result.
