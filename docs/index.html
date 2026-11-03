@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KKBox Retention Dashboard</title>
+<meta name="description" content="Churn drivers, outreach targeting, model monitoring, data quality and experiment plan for a music-streaming subscription service (KKBox, WSDM 2018 dataset).">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --surface-0: #f4f3f0;
+  --surface-1: #fcfcfb;
+  --surface-2: #f1f0ec;
+  --border: #e3e1dc;
+  --grid: #ebe9e4;
+  --text-primary: #0b0b0b;
+  --text-secondary: #46453f;
+  --text-muted: #6f6e69;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --reference: #a9a8a2;
+  --accent-soft: #e8f0fb;
+  --good: #0f7b3e;
+  --good-soft: #e3f3e8;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --info-soft: #eceaf9;
+  --info: #4a3fb0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-0: #111110;
+    --surface-1: #1a1a19;
+    --surface-2: #222220;
+    --border: #2e2e2c;
+    --grid: #262624;
+    --text-primary: #f0efec;
+    --text-secondary: #cfcec6;
+    --text-muted: #9a9991;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --reference: #5f5e59;
+    --accent-soft: #1b2a3d;
+    --good: #5cc98a;
+    --good-soft: #15291d;
+    --warn: #e0a54a;
+    --warn-soft: #2e2414;
+    --info-soft: #24223a;
+    --info: #a9a1f0;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #111110;
+  --surface-1: #1a1a19;
+  --surface-2: #222220;
+  --border: #2e2e2c;
+  --grid: #262624;
+  --text-primary: #f0efec;
+  --text-secondary: #cfcec6;
+  --text-muted: #9a9991;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --reference: #5f5e59;
+  --accent-soft: #1b2a3d;
+  --good: #5cc98a;
+  --good-soft: #15291d;
+  --warn: #e0a54a;
+  --warn-soft: #2e2414;
+  --info-soft: #24223a;
+  --info: #a9a1f0;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: 64px; }
+body {
+  margin: 0; background: var(--surface-0); color: var(--text-primary);
+  font: 15px/1.55 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+a { color: var(--series-1); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.86em; }
+b, strong { font-weight: 600; }
+.wrap { max-width: 1160px; margin: 0 auto; padding: 0 16px 56px; }
+
+/* Top navigation */
+nav.top { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--surface-0) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+nav.top .inner { max-width: 1160px; margin: 0 auto; padding: 0 16px; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+nav.top .inner::-webkit-scrollbar { display: none; }
+nav.top a { font-size: 13px; color: var(--text-secondary); padding: 13px 10px; white-space: nowrap; border-bottom: 2px solid transparent; }
+nav.top a:hover { color: var(--text-primary); text-decoration: none; }
+nav.top a.on { color: var(--text-primary); border-bottom-color: var(--series-1); }
+
+header { padding: 32px 0 8px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 6px 0 10px; letter-spacing: -0.02em; }
+.lede { color: var(--text-secondary); max-width: 780px; margin: 0 0 14px; font-size: 16px; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }
+.links a { border: 1px solid var(--border); background: var(--surface-1); padding: 5px 11px; border-radius: 999px; font-size: 13px; color: var(--text-secondary); }
+.links a:hover { color: var(--text-primary); text-decoration: none; border-color: var(--text-muted); }
+
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin: 22px 0 14px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
+.summary div { padding: 16px 18px; }
+.summary div + div { border-left: 1px solid var(--border); }
+.summary .k { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
+.summary p { margin: 0; font-size: 14.5px; color: var(--text-primary); }
+
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.kpi, .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
+.kpi { padding: 16px 18px; }
+.kpi .label { font-size: 13px; color: var(--text-secondary); }
+.kpi .value { font-size: 30px; font-weight: 650; letter-spacing: -0.02em; margin: 2px 0; font-variant-numeric: tabular-nums; }
+.kpi .note { font-size: 13px; color: var(--text-secondary); }
+
+section.block { padding-top: 8px; }
+.sec-head { margin: 34px 0 14px; }
+.sec-head .num { font-size: 12px; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
+.sec-head h2 { font-size: 21px; margin: 2px 0 4px; letter-spacing: -0.015em; }
+.sec-head .decide { margin-top: 8px; display: inline-block; font-size: 13px; color: var(--text-primary); background: var(--accent-soft); border-radius: 6px; padding: 4px 10px; }
+.sec-head p { margin: 0; color: var(--text-secondary); max-width: 820px; font-size: 14.5px; }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.card { padding: 18px 18px 16px; min-width: 0; }
+.card.wide { grid-column: 1 / -1; }
+.card h3 { font-size: 16px; margin: 0 0 2px; letter-spacing: -0.01em; }
+.card .sub { font-size: 13.5px; color: var(--text-secondary); margin: 0 0 10px; }
+.takeaway { font-size: 13.5px; color: var(--text-primary); margin: 10px 0 0; padding: 9px 12px; border-left: 3px solid var(--series-1); background: var(--surface-2); border-radius: 0 6px 6px 0; }
+.takeaway b { font-weight: 600; }
+.foot { font-size: 12.5px; color: var(--text-muted); margin: 8px 0 0; }
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 14px; }
+.toolbar .tlabel { font-size: 13px; color: var(--text-secondary); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface-1); }
+.seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--text-secondary); padding: 6px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--text-primary); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--text-secondary); margin: 0 0 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.legend i.line { height: 2px; width: 14px; border-radius: 1px; }
+
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { fill: var(--text-muted); font-size: 11.5px; font-family: Inter, system-ui, sans-serif; }
+.chart .lbl { fill: var(--text-secondary); font-weight: 500; }
+.chart .grid-line { stroke: var(--grid); stroke-width: 1; }
+.chart .axis-line { stroke: var(--border); stroke-width: 1; }
+.chart .hit { fill: transparent; cursor: crosshair; }
+.chart .xhair { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .band { fill: var(--surface-2); }
+.tip {
+  position: fixed; pointer-events: none; z-index: 10; background: var(--surface-1); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.45;
+  box-shadow: 0 6px 20px rgba(0,0,0,.12); opacity: 0; transition: opacity .1s; max-width: 280px;
+}
+.tip b { font-weight: 600; }
+.tip .row { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.tip .row span:first-child { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.tip .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.split h4 { font-size: 13px; font-weight: 600; margin: 0 0 4px; color: var(--text-secondary); }
+
+/* Planner */
+.planner { display: grid; grid-template-columns: 300px 1fr; gap: 16px; }
+.controls { display: flex; flex-direction: column; gap: 16px; }
+.ctl label { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+.ctl label output { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ctl input[type=range] { width: 100%; accent-color: var(--series-1); }
+.ctl input[type=number] { width: 100%; font: inherit; font-size: 14px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-1); color: var(--text-primary); }
+.ctl .hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.assume { font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-soft); border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
+.ptable { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ptable th, .ptable td { padding: 9px 10px; border-top: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; }
+.ptable th:first-child, .ptable td:first-child { text-align: left; }
+.ptable thead th { border-top: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 600; }
+.ptable thead th .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+.ptable td:first-child { color: var(--text-secondary); }
+.ptable tr.grp td { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); font-weight: 600; padding-top: 14px; border-top: 0; }
+.ptable tr.em td { font-weight: 600; color: var(--text-primary); }
+.ptable td.better { color: var(--good); font-weight: 600; }
+
+/* Tables and pills */
+.table-scroll { overflow-x: auto; }
+table.plain { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.plain th, table.plain td { text-align: left; padding: 10px; border-top: 1px solid var(--border); vertical-align: top; }
+table.plain th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 600; border-top: 0; white-space: nowrap; }
+table.plain td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.plain td .what { font-weight: 600; color: var(--text-primary); }
+table.plain td { color: var(--text-secondary); }
+.pill { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.done { background: var(--good-soft); color: var(--good); }
+.pill.open { background: var(--warn-soft); color: var(--warn); }
+.pill.hyp { background: var(--info-soft); color: var(--info); }
+.pill.plan { background: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border); }
+
+/* Action cards */
+.action .rank { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; display: flex; justify-content: space-between; align-items: center; }
+.action h3 { margin: 6px 0 10px; font-size: 17px; }
+.action dl { margin: 0; display: grid; grid-template-columns: 74px 1fr; gap: 7px 10px; font-size: 13.5px; }
+.action dt { color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; padding-top: 2px; }
+.action dd { margin: 0; color: var(--text-secondary); }
+.action .big { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; color: var(--text-primary); font-variant-numeric: tabular-nums; margin: 0 0 12px; }
+.action .big span { font-size: 13px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0; display: block; margin-top: 2px; }
+
+/* Experiment spec */
+.spec { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.spec div { background: var(--surface-1); padding: 14px 16px; }
+.spec .k { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 600; }
+.spec .v { font-size: 17px; font-weight: 650; margin: 2px 0; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.spec .d { font-size: 13px; color: var(--text-secondary); }
+
+/* Pipeline */
+.pipe { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; position: relative; }
+.stage { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px; position: relative; min-width: 0; }
+.stage:not(:last-child)::after { content: "→"; position: absolute; right: -10px; top: 50%; transform: translate(50%, -50%); color: var(--text-muted); font-size: 14px; z-index: 1; }
+.stage .n { font-size: 11.5px; color: var(--text-muted); font-weight: 600; }
+.stage h4 { margin: 2px 0 4px; font-size: 14px; }
+.stage .tool { font-size: 12.5px; color: var(--series-1); font-weight: 500; margin-bottom: 6px; }
+.stage .out { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 8px; }
+.next { margin-top: 12px; font-size: 13.5px; color: var(--text-secondary); }
+
+.limits { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.limits li { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; font-size: 13.5px; color: var(--text-secondary); }
+.limits li b { display: block; color: var(--text-primary); font-size: 14px; margin-bottom: 2px; }
+
+footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--text-muted); }
+
+@media (max-width: 980px) {
+  .pipe { grid-template-columns: repeat(4, 1fr); }
+  .stage:nth-child(4)::after { display: none; }
+  .spec { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 860px) {
+  .kpis { grid-template-columns: 1fr 1fr; }
+  .grid, .grid3, .split, .planner, .limits { grid-template-columns: 1fr; }
+  .summary { grid-template-columns: 1fr; }
+  .summary div + div { border-left: 0; border-top: 1px solid var(--border); }
+}
+@media (max-width: 560px) {
+  .pipe { grid-template-columns: 1fr 1fr; }
+  .stage::after { display: none; }
+  .spec { grid-template-columns: 1fr; }
+  .kpi .value { font-size: 25px; }
+}
+</style>
+</head>
+<body>
+<nav class="top" aria-label="Sections">
+  <div class="inner">
+    <a href="#overview">Overview</a>
+    <a href="#churn">Where churn comes from</a>
+    <a href="#targeting">Targeting</a>
+    <a href="#planner">Outreach planner</a>
+    <a href="#monitoring">Model monitoring</a>
+    <a href="#signals">Drivers</a>
+    <a href="#actions">Actions and test plan</a>
+    <a href="#quality">Data quality</a>
+    <a href="#pipeline">Pipeline</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header id="overview">
+    <div class="eyebrow">Subscription retention case study · KKBox music streaming (WSDM 2018 dataset)</div>
+    <h1>Who is about to cancel, and who should the retention team contact first?</h1>
+    <p class="lede">About 880,000 subscriptions expire every month. A retention team can only contact a small share of them. This dashboard shows where churn comes from, how well a risk score finds churners at a fixed contact budget, and what should be tested before anything is rolled out.</p>
+    <div class="links">
+      <a href="https://github.com/kcaseymei/kkbox-retention-analytics">GitHub repository</a>
+      <a href="https://github.com/kcaseymei/kkbox-retention-analytics/blob/main/reports/model_results.md">Model results</a>
+      <a href="https://github.com/kcaseymei/kkbox-retention-analytics/blob/main/docs/model_card.md">Model card</a>
+      <a href="https://github.com/kcaseymei/kkbox-retention-analytics/blob/main/docs/recommendations.md">Recommendations</a>
+      <a href="https://github.com/kcaseymei/kkbox-retention-analytics/blob/main/docs/experiment_design.md">Experiment design</a>
+      <a href="https://github.com/kcaseymei/kkbox-retention-analytics/blob/main/reports/data_quality_issues.md">Data-quality register</a>
+    </div>
+  </header>
+
+  <div class="summary">
+    <div><div class="k">Problem</div><p id="sum-problem"></p></div>
+    <div><div class="k">Finding</div><p id="sum-finding"></p></div>
+    <div><div class="k">Next step</div><p>Run a randomized test of a <b>renewal reminder</b> and an <b>auto-renew prompt</b> on the top-risk list. No retention gain is claimed until that test is read.</p></div>
+  </div>
+  <section class="kpis" id="kpis"></section>
+
+  <!-- 1. Churn -->
+  <section class="block" id="churn">
+    <div class="sec-head">
+      <div class="num">1 · Where churn comes from</div>
+      <h2>Churn is concentrated in users who renew by hand</h2>
+      <p>Churn here means the subscription expires in the month and the user does not renew within 30 days (the competition's definition, rebuilt from the transaction history).</p>
+      <p class="decide"><b>Decision it supports:</b> Which segment to act on first: manual renewers, not the whole base.</p>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <h3>Monthly churn rate, all expiring users</h3>
+        <p class="sub">2015-07 to 2017-02</p>
+        <div class="chart" id="c-churn"></div>
+        <p class="takeaway" id="t-churn"></p>
+      </div>
+      <div class="card">
+        <h3>Churn rate by renewal mode</h3>
+        <p class="sub">Manual renewers have auto-renew off on their last transaction</p>
+        <div class="legend" id="l-mode"></div>
+        <div class="chart" id="c-mode"></div>
+        <p class="takeaway" id="t-mode"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Targeting -->
+  <section class="block" id="targeting">
+    <div class="sec-head">
+      <div class="num">2 · Targeting</div>
+      <h2>How many churners does a short contact list catch?</h2>
+      <p>Each month every expiring user gets a risk score, using only data known on the last day of the previous month. The team contacts the top of the list. "Share of churners reached" is the share of that month's churners who are on the list.</p>
+      <p class="decide"><b>Decision it supports:</b> Use the risk score or a simple rule, and how early to score before expiry.</p>
+    </div>
+    <div class="toolbar">
+      <span class="tlabel">Month scored (held out, never used in training)</span>
+      <div class="seg" id="month-seg" role="group" aria-label="Month"></div>
+    </div>
+    <p class="foot" id="month-note" style="margin:-6px 0 12px"></p>
+    <div class="grid">
+      <div class="card">
+        <h3>Share of churners reached, by list size</h3>
+        <p class="sub">List = top 5%, 10% or 20% of expiring users by score</p>
+        <div class="legend" id="l-recall"></div>
+        <div class="chart" id="c-recall"></div>
+        <p class="takeaway" id="t-recall"></p>
+      </div>
+      <div class="card">
+        <h3>Share of churners reached, by days left before expiry</h3>
+        <p class="sub">10% list, split by days from scoring to the expiration date</p>
+        <div class="legend" id="l-lead"></div>
+        <div class="chart" id="c-lead"></div>
+        <p class="takeaway"><b>Trade-off:</b> users who expire within a week are the easiest to find, but they leave the team the least time to act.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Planner -->
+  <section class="block" id="planner">
+    <div class="sec-head">
+      <div class="num">3 · Outreach planner</div>
+      <h2>What a contact budget buys, under stated assumptions</h2>
+      <p>The first three rows are measured on held-out data. Everything below "Scenario" depends on the assumptions marked <span class="assume" style="margin:0">assumption</span>, which only an experiment can replace.</p>
+      <p class="decide"><b>Decision it supports:</b> List size and budget per month, and the effect the experiment must detect to pay off.</p>
+    </div>
+    <div class="card">
+      <div class="planner">
+        <div class="controls">
+          <div class="ctl"><label>Month</label><div class="seg" id="p-month"></div></div>
+          <div class="ctl"><label>List size (share of expiring users)</label><div class="seg" id="p-cap"></div></div>
+          <div class="ctl">
+            <label><span>Save rate<span class="assume">assumption</span></span><output id="o-save"></output></label>
+            <input type="range" id="p-save" min="0" max="25" step="0.5" value="7.5" aria-label="Save rate">
+            <div class="hint">Share of contacted would-be churners who renew because of the contact. 7.5% is close to the +2-point effect used to size the experiment.</div>
+          </div>
+          <div class="ctl">
+            <label><span>Cost per contact, NT$<span class="assume">assumption</span></span></label>
+            <input type="number" id="p-cost" min="0" step="0.5" value="1" aria-label="Cost per contact">
+          </div>
+          <div class="ctl">
+            <label><span>Value of one saved subscriber-month, NT$<span class="assume">assumption</span></span></label>
+            <input type="number" id="p-value" min="1" step="1" value="149" aria-label="Value per saved subscriber-month">
+            <div class="hint">NT$149 is the most common list price among manual renewers.</div>
+          </div>
+        </div>
+        <div class="table-scroll"><table class="ptable" id="p-table"></table></div>
+      </div>
+      <p class="foot">Measured rows come from <code>reports/model_results/results.csv</code>. The scenario counts one extra month of revenue per saved user and ignores later months, message fatigue and users who would have renewed anyway.</p>
+    </div>
+  </section>
+
+  <!-- 4. Monitoring -->
+  <section class="block" id="monitoring">
+    <div class="sec-head">
+      <div class="num">4 · Model monitoring</div>
+      <h2>Is the score stable from month to month?</h2>
+      <p>The same settings were fixed in advance and applied to every month from 2016-07; the model was retrained each month only on months whose outcome was already known.</p>
+      <p class="decide"><b>Decision it supports:</b> When to retrain or fall back to the rule: alert if the score's lead over the rule shrinks.</p>
+    </div>
+    <div class="card">
+      <h3>Share of churners reached by a 10% list, every evaluated month</h3>
+      <p class="sub">Shaded months are the final test; earlier months were used for validation</p>
+      <div class="legend" id="l-stab"></div>
+      <div class="chart" id="c-stab"></div>
+      <p class="takeaway" id="t-stab"></p>
+    </div>
+  </section>
+
+  <!-- 5. Drivers -->
+  <section class="block" id="signals">
+    <div class="sec-head">
+      <div class="num">5 · Drivers</div>
+      <h2>What the score relies on</h2>
+      <p>The subscription record (renewal mode, payment, transaction history) carries most of the signal. Listening behavior adds a little on top.</p>
+      <p class="decide"><b>Decision it supports:</b> Which data to keep collecting and which message fits which user.</p>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <h3>Listening change and churn</h3>
+        <p class="sub">Listening days in the last 30 days compared with the 30 days before. "Down" and "Up" mean a change of more than 25%. Test months 2017-01 and 2017-02.</p>
+        <div class="split">
+          <div><h4>Auto-renew on</h4><div class="chart" id="c-dec-auto"></div></div>
+          <div><h4>Manual renewers</h4><div class="chart" id="c-dec-manual"></div></div>
+        </div>
+        <p class="takeaway">Users who stop or cut back listening churn more in both groups. The two panels use <b>different scales</b>: manual renewers churn about ten times as often.</p>
+      </div>
+      <div class="card">
+        <h3>Which inputs the score depends on most</h3>
+        <p class="sub">Each input is scrambled in turn and the model is re-scored. A longer bar means the model ranks churners worse without that input (drop in AUC, January 2017).</p>
+        <div class="legend" id="l-imp"></div>
+        <div class="chart" id="c-imp"></div>
+        <p class="takeaway"><b>Payment method</b> matters most, but the dataset does not say what each code means, so no business reading is drawn from it. Related inputs share credit, so a short bar does not mean an input is useless.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. Actions -->
+  <section class="block" id="actions">
+    <div class="sec-head">
+      <div class="num">6 · Actions and test plan</div>
+      <h2>Three actions to test, in priority order</h2>
+      <p>These are hypotheses. A high risk score shows who is likely to leave, not who can be persuaded to stay; only a randomized test shows that.</p>
+      <p class="decide"><b>Decision it supports:</b> What to launch, to whom, and the rule for rolling it out or stopping it.</p>
+    </div>
+    <div class="grid3" id="action-cards"></div>
+    <div class="spec" style="margin-top:16px">
+      <div><div class="k">Design</div><div class="v">Randomized, 3 arms</div><div class="d">Control · reminder · reminder + auto-renew prompt (manual renewers only)</div></div>
+      <div><div class="k">Primary metric</div><div class="v">Paid at day 30</div><div class="d">Active paid subscription 30 days after the original expiration date</div></div>
+      <div><div class="k">Sample</div><div class="v">≈ 8,300 per arm</div><div class="d">Detects +2 points at 80% power on a 73% baseline; two monthly cohorts</div></div>
+      <div><div class="k">Readout</div><div class="v">≈ 2 months</div><div class="d">After the contact; no peeking at the primary metric</div></div>
+      <div><div class="k">Break-even</div><div class="v">+0.67 points</div><div class="d">NT$1 per contact ÷ NT$149 per saved month</div></div>
+      <div><div class="k">Guardrails</div><div class="v">Unsubscribes, complaints</div><div class="d">Pause an arm if either exceeds control by more than 1 point</div></div>
+      <div><div class="k">Roll out if</div><div class="v">Effect ≥ break-even</div><div class="d">and the confidence interval is above 0, with no guardrail breached</div></div>
+      <div><div class="k">Status</div><div class="v">Designed, not run</div><div class="d">All defaults are labeled assumptions in the design document</div></div>
+    </div>
+  </section>
+
+  <!-- 7. Data quality -->
+  <section class="block" id="quality">
+    <div class="sec-head">
+      <div class="num">7 · Data quality</div>
+      <h2>19 issues found and logged before any analysis</h2>
+      <p>Every issue is recorded as finding → decision → treatment → check. Raw files are never edited. The issues below change results if ignored.</p>
+      <p class="decide"><b>Decision it supports:</b> Which numbers can be trusted, and which fixes the data team must make first.</p>
+    </div>
+    <div class="card wide">
+      <div class="table-scroll">
+      <table class="plain">
+        <thead><tr><th>Issue</th><th>Scale</th><th>Why it matters</th><th>Decision</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td><span class="what">Corrupt listening time</span><br><code>total_secs</code> negative or impossibly large</td><td class="n">204,486 rows<br>(v1, 0.05%)</td><td>One value near −9.2×10<sup>15</sup> s dominates any sum or average</td><td>Keep source values; flag invalid durations instead of summing raw time</td><td><span class="pill open">Rule pending</span></td></tr>
+          <tr><td><span class="what">Two releases, neither complete</span><br><code>transactions_v2</code> is not a full refresh</td><td class="n">361,187 earlier<br>rows in v2</td><td>Using one release alone loses history and shifts churn labels</td><td>Stack both with a <code>release</code> column; never drop rows</td><td><span class="pill done">Applied</span></td></tr>
+          <tr><td><span class="what">Users with no listening logs</span></td><td class="n">≈ 12% of<br>labeled users</td><td>No logs is not the same as zero listening</td><td>Missing flag, not zero</td><td><span class="pill done">Applied</span></td></tr>
+          <tr><td><span class="what">Users with no member profile</span></td><td class="n">≈ 11% of<br>labeled users</td><td>An inner join drops them and changes the churn rate (5.4% vs 9.5%)</td><td>Left join plus a <code>has_member_profile</code> flag</td><td><span class="pill done">Verified</span></td></tr>
+          <tr><td><span class="what">Age is mostly zero</span><br><code>bd</code> = 0, or outside 1–100</td><td class="n">67% zero</td><td>Age averages and age segments are unreliable</td><td>Do not impute; cleaned age needs a stated rule</td><td><span class="pill open">Rule pending</span></td></tr>
+          <tr><td><span class="what">Expiry before purchase date</span></td><td class="n">153,660 rows<br>(v1)</td><td>Mostly cancellations; deleting them would distort expiry dates</td><td>Keep; rebuild the effective expiry with the official labeller's rules</td><td><span class="pill done">Applied</span></td></tr>
+          <tr><td><span class="what">Same user in both label files</span></td><td class="n">881,701 users<br>45,990 relabeled</td><td>A random train/test split would leak the same person into both</td><td>Split by time, never at random</td><td><span class="pill done">Applied</span></td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="foot">Full register with all 19 issues and their evidence: <a href="https://github.com/kcaseymei/kkbox-retention-analytics/blob/main/reports/data_quality_issues.md">reports/data_quality_issues.md</a>.</p>
+    </div>
+  </section>
+
+  <!-- 8. Pipeline -->
+  <section class="block" id="pipeline">
+    <div class="sec-head">
+      <div class="num">8 · Pipeline</div>
+      <h2>From raw files to this page</h2>
+      <p>Every number on this page is regenerated from the repository; the page reads only aggregated tables, no user-level data.</p>
+    </div>
+    <div class="pipe">
+      <div class="stage"><div class="n">1</div><h4>Raw data</h4><div class="tool">Kaggle CSV</div><div class="out">2 releases, ≈ 444M rows (410M listening logs)</div><span class="pill done">Done</span></div>
+      <div class="stage"><div class="n">2</div><h4>Audit</h4><div class="tool">DuckDB · Parquet</div><div class="out">Full-data checks, 19 issues logged</div><span class="pill done">Done</span></div>
+      <div class="stage"><div class="n">3</div><h4>Relational model</h4><div class="tool">PostgreSQL</div><div class="out">Staging + analytics schemas, 9 SQL analyses</div><span class="pill done">Done</span></div>
+      <div class="stage"><div class="n">4</div><h4>Labels and features</h4><div class="tool">Python · pandas</div><div class="out">Labels rebuilt (98.4% match); 63 features × 21 months; 4 leakage checks</div><span class="pill done">Done</span></div>
+      <div class="stage"><div class="n">5</div><h4>Marts</h4><div class="tool">dbt</div><div class="out">6 models, 38 data tests (local DuckDB)</div><span class="pill done">Done</span></div>
+      <div class="stage"><div class="n">6</div><h4>Risk models</h4><div class="tool">scikit-learn</div><div class="out">Rules, logistic regression, gradient boosting; time-based tests</div><span class="pill done">Done</span></div>
+      <div class="stage"><div class="n">7</div><h4>Dashboard</h4><div class="tool">HTML · SVG · GitHub Pages</div><div class="out">This page, regenerated from the result tables by one script</div><span class="pill done">Done</span></div>
+    </div>
+    <p class="next"><span class="pill plan">Planned</span>&nbsp; Distributed log aggregation on Databricks / PySpark, compared with the local result; dbt marts served from Snowflake.</p>
+
+    <div class="sec-head" style="margin-top:28px">
+      <h2 style="font-size:17px">What this analysis does not show</h2>
+    </div>
+    <ul class="limits">
+      <li><b>No proven retention gain.</b> Nothing here shows that contacting users keeps them. That needs the experiment above.</li>
+      <li><b>Results are weaker on the official March 2017 labels.</b> The official file treats early renewers differently, and 11.2% of its users are outside the population the model was built for.</li>
+      <li><b>Labels are reliable only up to 2017-02.</b> Renewals after 2017-03-31 are not in the data, so later months cannot be labeled.</li>
+      <li><b>Profile data may look ahead.</b> The member table is a 2017-11 snapshot, so some profile values may postdate the scoring date.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Data: <a href="https://www.kaggle.com/competitions/kkbox-churn-prediction-challenge">WSDM – KKBox's Churn Prediction Challenge</a> (Kaggle). Aggregated results only; no user-level data is published. Built by Casey Mei.
+  </footer>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script src="assets/dashboard_data.js"></script>
+<script>
+(function () {
+  const D = window.DASHBOARD_DATA;
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const pct = (v, d = 1) => (v == null ? "–" : v.toFixed(d) + "%");
+  const int = (v) => Math.round(v).toLocaleString("en-US");
+  const NS = "http://www.w3.org/2000/svg";
+  const tip = document.getElementById("tip");
+  const $ = (id) => document.getElementById(id);
+
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function showTip(html, ev) {
+    tip.innerHTML = html; tip.style.opacity = 1;
+    const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = ev.clientX + pad, y = ev.clientY + pad;
+    if (x + w > innerWidth - 8) x = ev.clientX - w - pad;
+    if (y + h > innerHeight - 8) y = ev.clientY - h - pad;
+    tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+  }
+  function hideTip() { tip.style.opacity = 0; }
+  const row = (color, name, val) =>
+    `<div class="row"><span>${color ? `<i style="background:${color}"></i>` : ""}${name}</span><span class="num">${val}</span></div>`;
+  function niceMax(v) {
+    const p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p;
+    return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
+  }
+  function legend(id, items) {
+    $(id).innerHTML = items.map((s) =>
+      `<span><i class="${s.line ? "line" : ""}" style="background:${css(s.color)}"></i>${s.name}</span>`).join("");
+  }
+  const isNice = (v) => [1, 2, 5, 10].includes(+(v / Math.pow(10, Math.floor(Math.log10(v)))).toFixed(6));
+  function yAxis(svg, m, w, h, max, fmt, min = 0) {
+    const span = max - min, ticks = isNice(span / 5) ? 5 : 4;
+    for (let i = 0; i <= ticks; i++) {
+      const v = +(min + (span / ticks) * i).toFixed(4), y = m.t + h - ((v - min) / span) * h;
+      el("line", { x1: m.l, x2: m.l + w, y1: y, y2: y, class: i ? "grid-line" : "axis-line" }, svg);
+      el("text", { x: m.l - 6, y: y + 4, "text-anchor": "end" }, svg).textContent = fmt(v);
+    }
+  }
+  // Path for a bar with 4px rounded top corners anchored to the baseline.
+  function barPath(x, y, w, h, r = 4) {
+    r = Math.min(r, w / 2, h);
+    return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+  }
+
+  function lineChart(id, cfg) {
+    const box = $(id);
+    const draw = () => {
+      box.innerHTML = "";
+      if (box.clientWidth < 80) return; // hidden or not laid out yet; ResizeObserver redraws
+      const W = box.clientWidth, H = cfg.height || 240, m = { t: 12, r: 14, b: 26, l: 40 };
+      const w = W - m.l - m.r, h = H - m.t - m.b;
+      const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": cfg.label }, box);
+      const min = cfg.min || 0;
+      const max = cfg.max || niceMax(Math.max(...cfg.series.flatMap((s) => s.values)) * 1.05);
+      const n = cfg.x.length, X = (i) => m.l + (w * i) / (n - 1), Y = (v) => m.t + h - ((v - min) / (max - min)) * h;
+      if (cfg.shadeFrom != null) el("rect", { x: X(cfg.shadeFrom) - w / (n - 1) / 2, y: m.t, width: X(n - 1) - X(cfg.shadeFrom) + w / (n - 1) / 2, height: h, class: "band" }, svg);
+      yAxis(svg, m, w, h, max, (v) => v + "%", min);
+      const step = cfg.everyLabel ? 1 : Math.ceil(n / Math.max(2, Math.floor(w / 62)));
+      cfg.x.forEach((lab, i) => {
+        if (i % step === 0) el("text", { x: X(i), y: H - 6, "text-anchor": "middle" }, svg).textContent = lab;
+      });
+      cfg.series.forEach((s) => {
+        const c = css(s.color);
+        el("path", { d: s.values.map((v, i) => `${i ? "L" : "M"}${X(i)},${Y(v)}`).join(""), fill: "none", stroke: c, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+        if (cfg.markers) s.values.forEach((v, i) => el("circle", { cx: X(i), cy: Y(v), r: 4, fill: c, stroke: css("--surface-1"), "stroke-width": 2 }, svg));
+        if (cfg.annotate) cfg.annotate.forEach((i) => {
+          el("circle", { cx: X(i), cy: Y(s.values[i]), r: 4, fill: c, stroke: css("--surface-1"), "stroke-width": 2 }, svg);
+          el("text", { x: X(i) + 8, y: Y(s.values[i]) + 4, class: "lbl" }, svg).textContent = `${cfg.x[i]}: ${pct(s.values[i])}`;
+        });
+      });
+      const xh = el("line", { y1: m.t, y2: m.t + h, class: "xhair", visibility: "hidden" }, svg);
+      const dots = cfg.series.map((s) => el("circle", { r: 4, fill: css(s.color), stroke: css("--surface-1"), "stroke-width": 2, visibility: "hidden" }, svg));
+      const hit = el("rect", { x: m.l, y: m.t, width: w, height: h, class: "hit" }, svg);
+      hit.addEventListener("pointermove", (ev) => {
+        const r = svg.getBoundingClientRect();
+        const i = Math.max(0, Math.min(n - 1, Math.round(((ev.clientX - r.left) - m.l) / (w / (n - 1)))));
+        xh.setAttribute("x1", X(i)); xh.setAttribute("x2", X(i)); xh.setAttribute("visibility", "visible");
+        dots.forEach((d, k) => { d.setAttribute("cx", X(i)); d.setAttribute("cy", Y(cfg.series[k].values[i])); d.setAttribute("visibility", "visible"); });
+        showTip(`<b>${cfg.x[i]}</b>` + cfg.series.map((s) => row(css(s.color), s.name, pct(s.values[i]))).join("") + (cfg.extra ? cfg.extra(i) : ""), ev);
+      });
+      hit.addEventListener("pointerleave", () => { hideTip(); xh.setAttribute("visibility", "hidden"); dots.forEach((d) => d.setAttribute("visibility", "hidden")); });
+    };
+    draw(); return draw;
+  }
+
+  function barChart(id, cfg) {
+    const box = $(id);
+    const draw = () => {
+      box.innerHTML = "";
+      if (box.clientWidth < 80) return; // hidden or not laid out yet; ResizeObserver redraws
+      const W = box.clientWidth, H = cfg.height || 240, m = { t: 18, r: 8, b: 28, l: cfg.left || 40 };
+      const w = W - m.l - m.r, h = H - m.t - m.b;
+      const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": cfg.label }, box);
+      const max = cfg.max || niceMax(Math.max(...cfg.series.flatMap((s) => s.values)) * 1.08);
+      yAxis(svg, m, w, h, max, cfg.yFmt || ((v) => v + "%"));
+      const G = cfg.groups.length, S = cfg.series.length, gw = w / G;
+      const inner = Math.min(gw * 0.78, S * 34), bw = (inner - 2 * (S - 1)) / S;
+      const vf = cfg.valFmt || pct;
+      cfg.groups.forEach((g, gi) => {
+        const x0 = m.l + gi * gw + (gw - inner) / 2;
+        el("text", { x: m.l + gi * gw + gw / 2, y: H - 8, "text-anchor": "middle" }, svg).textContent = g;
+        cfg.series.forEach((s, si) => {
+          const v = s.values[gi], bh = (v / max) * h, x = x0 + si * (bw + 2), y = m.t + h - bh;
+          el("path", { d: barPath(x, y, bw, bh), fill: css(s.color) }, svg);
+          if (cfg.labelSeries === si && bw >= 22)
+            el("text", { x: x + bw / 2, y: y - 5, "text-anchor": "middle", class: "lbl" }, svg).textContent = vf(v, 0);
+          const hit = el("rect", { x: x - 1, y: m.t, width: bw + 2, height: h, class: "hit" }, svg);
+          hit.addEventListener("pointermove", (ev) => showTip(`<b>${cfg.tipTitle ? cfg.tipTitle(gi) : g}</b>` + row(css(s.color), s.name, vf(v)) + (cfg.extra ? cfg.extra(gi, si) : ""), ev));
+          hit.addEventListener("pointerleave", hideTip);
+        });
+      });
+    };
+    draw(); return draw;
+  }
+
+  function hbar(id, cfg) {
+    const box = $(id);
+    const draw = () => {
+      box.innerHTML = "";
+      if (box.clientWidth < 80) return; // hidden or not laid out yet; ResizeObserver redraws
+      const W = box.clientWidth, rowH = 28, m = { t: 4, r: 54, b: 4, l: Math.min(250, W * 0.52) };
+      const H = m.t + m.b + rowH * cfg.items.length, w = W - m.l - m.r;
+      const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": cfg.label }, box);
+      const max = Math.max(...cfg.items.map((d) => d.value));
+      el("line", { x1: m.l, x2: m.l, y1: m.t, y2: H - m.b, class: "axis-line" }, svg);
+      cfg.items.forEach((d, i) => {
+        const c = css(d.color), y = m.t + i * rowH, bh = 14, bw = Math.max(3, (d.value / max) * w), y0 = y + (rowH - bh) / 2, r = Math.min(4, bw);
+        el("text", { x: m.l - 8, y: y + rowH / 2 + 4, "text-anchor": "end", class: "lbl" }, svg).textContent = d.label;
+        el("path", { d: `M${m.l},${y0}H${m.l + bw - r}Q${m.l + bw},${y0} ${m.l + bw},${y0 + r}V${y0 + bh - r}Q${m.l + bw},${y0 + bh} ${m.l + bw - r},${y0 + bh}H${m.l}Z`, fill: c }, svg);
+        el("text", { x: m.l + bw + 6, y: y + rowH / 2 + 4 }, svg).textContent = cfg.fmt(d.value);
+        const hit = el("rect", { x: 0, y, width: W, height: rowH, class: "hit" }, svg);
+        hit.addEventListener("pointermove", (ev) => showTip(`<b>${d.label}</b><div class="mono" style="color:var(--text-muted)">${d.code}</div>` + row(c, d.group, "AUC −" + cfg.fmt(d.value)), ev));
+        hit.addEventListener("pointerleave", hideTip);
+      });
+    };
+    draw(); return draw;
+  }
+
+  function segmented(id, options, initial, onChange) {
+    const box = $(id);
+    box.setAttribute("role", "group");
+    box.innerHTML = options.map((o) => `<button type="button" data-id="${o.id}">${o.label}</button>`).join("");
+    const set = (v) => box.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.id === String(v)));
+    box.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { set(b.dataset.id); onChange(b.dataset.id); } });
+    set(initial);
+  }
+
+  // ---------- Shared lookups ----------
+  const rec = (month, model, cap) => D.recall.find((r) => r.month === month && r.model === model && r.capacity === cap);
+  const mon = (m) => D.monthly.find((r) => r.target_month === m);
+  const reb = D.monthly.filter((r) => r.label_source === "rebuilt");
+  const months = reb.map((r) => r.target_month);
+  const feb = mon("2017-02");
+
+  // ---------- Summary and KPIs ----------
+  const gb = ["2017-01", "2017-02"].map((mo) => rec(mo, "gradient boosting", 0.1).recall * 100);
+  const rule = ["2017-01", "2017-02"].map((mo) => rec(mo, "rule: no auto-renew", 0.1).recall * 100);
+  const recent = reb.filter((r) => r.target_month >= "2016-07");
+  const mUsers = recent.map((r) => r.manual_share_of_users), mChurn = recent.map((r) => r.manual_share_of_churners);
+  const rng = (a) => `${Math.round(Math.min(...a))}–${Math.round(Math.max(...a))}%`;
+  $("sum-problem").innerHTML = `About <b>${int(Math.round(feb.users / 1e4) * 1e4)}</b> subscriptions expired in February 2017 and <b>${pct(feb.churn_rate)}</b> were not renewed. A team can only contact a fraction of users each month.`;
+  $("sum-finding").innerHTML = `Manual renewers are <b>${rng(mUsers)}</b> of users but <b>${rng(mChurn)}</b> of churners. A risk score puts <b>${Math.round(gb[1])}–${Math.round(gb[0])}%</b> of all churners in the top 10% of the list.`;
+  const kpis = [
+    { label: "Expiring subscriptions / month", value: `${(feb.users / 1000).toFixed(0)}k`, note: `February 2017; ${pct(feb.churn_rate)} churned` },
+    { label: "Churners caught by a 10% list", value: pct(gb[0]), note: `Risk score, Jan 2017 (Feb ${pct(gb[1])}). Simple rule: ${pct(rule[0])}. Random: 10%` },
+    { label: "Churners who renew manually", value: rng(mChurn), note: `They are only ${rng(mUsers)} of users (2016-07 to 2017-02)` },
+    { label: "Data audited", value: "≈ 444M rows", note: "19 issues logged; labels rebuilt with a 98.4% match to the official file" },
+  ];
+  $("kpis").innerHTML = kpis.map((k) =>
+    `<div class="kpi"><div class="label">${k.label}</div><div class="value">${k.value}</div><div class="note">${k.note}</div></div>`).join("");
+
+  const redraws = [];
+
+  // ---------- 1. Churn ----------
+  const iSpike = months.indexOf("2016-03");
+  redraws.push(lineChart("c-churn", {
+    label: "Monthly churn rate, 2015-07 to 2017-02",
+    x: months, series: [{ name: "Churn rate", color: "--series-1", values: reb.map((r) => r.churn_rate) }],
+    annotate: [iSpike],
+    extra: (i) => row(null, "Expiring users", int(reb[i].users)),
+  }));
+  const last6 = reb.slice(-6).map((r) => r.churn_rate);
+  $("t-churn").innerHTML = `Churn ran at <b>${pct(Math.min(...last6))}–${pct(Math.max(...last6))}</b> a month in the last six months. The March 2016 spike coincides with a batch of subscriptions expiring on the same days (a hypothesis, not verified).`;
+  legend("l-mode", [{ name: "Manual renewers", color: "--series-2", line: 1 }, { name: "Auto-renewers", color: "--series-1", line: 1 }]);
+  redraws.push(lineChart("c-mode", {
+    label: "Churn rate of manual renewers and auto-renewers by month",
+    x: months,
+    series: [
+      { name: "Manual renewers", color: "--series-2", values: reb.map((r) => r.churn_rate_manual) },
+      { name: "Auto-renewers", color: "--series-1", values: reb.map((r) => r.churn_rate_auto) },
+    ],
+    extra: (i) => row(null, "Manual share of users", pct(reb[i].manual_share_of_users)) + row(null, "Manual share of churners", pct(reb[i].manual_share_of_churners)),
+  }));
+  $("t-mode").innerHTML = `Since mid-2016 manual renewers churn at <b>${rng(recent.map((r) => r.churn_rate_manual))}</b> against <b>${pct(Math.min(...recent.map((r) => r.churn_rate_auto)))}–${pct(Math.max(...recent.map((r) => r.churn_rate_auto)))}</b> for auto-renewers.`;
+
+  // ---------- 2. Targeting ----------
+  const MONTHS = [
+    { id: "2017-01", label: "Jan 2017" },
+    { id: "2017-02", label: "Feb 2017" },
+    { id: "2017-03", label: "Mar 2017 (official labels)", note: "March uses the official label file, which treats early renewers differently and includes users outside the modeled population. Read it as a stress test." },
+  ];
+  const RSERIES = [
+    { name: "Risk score (gradient boosting)", model: "gradient boosting", color: "--series-1" },
+    { name: "Risk score (logistic regression)", model: "logistic regression", color: "--series-3" },
+    { name: "Rule: auto-renew off", model: "rule: no auto-renew", color: "--series-2" },
+    { name: "Random list", model: null, color: "--reference" },
+  ];
+  legend("l-recall", RSERIES);
+  const LSERIES = [RSERIES[0], RSERIES[2]];
+  legend("l-lead", LSERIES);
+  const BANDS = ["1-7", "8-14", "15-21", "22-31"];
+  let current = "2017-01", recallDraw, leadDraw;
+  function renderMonth() {
+    const caps = [0.05, 0.1, 0.2];
+    recallDraw = barChart("c-recall", {
+      label: "Share of churners reached at 5, 10 and 20 percent list sizes", max: 100, labelSeries: 0,
+      groups: caps.map((c) => `Top ${c * 100}%`),
+      series: RSERIES.map((s) => ({ name: s.name, color: s.color, values: caps.map((c) => (s.model ? rec(current, s.model, c).recall : c) * 100) })),
+      extra: (gi, si) => { const m = RSERIES[si].model; if (!m) return ""; const r = rec(current, m, caps[gi]); return row(null, "Hit rate (churners on list)", pct(r.precision * 100)); },
+    });
+    const g10 = rec(current, "gradient boosting", 0.1), r10 = rec(current, "rule: no auto-renew", 0.1);
+    $("t-recall").innerHTML = `With a 10% list the score catches <b>${pct(g10.recall * 100)}</b> of churners against <b>${pct(r10.recall * 100)}</b> for the rule. About <b>1 in ${Math.round(1 / g10.precision)}</b> contacted users would otherwise churn (base rate 1 in ${Math.round(1 / g10.base_rate)}).`;
+    const lt = (model, band) => D.lead_time.find((r) => r.month === current && r.model === model && r.band === band);
+    leadDraw = barChart("c-lead", {
+      label: "Share of churners reached by days until expiration", max: 100, labelSeries: 0,
+      groups: BANDS.map((b) => b + " days"),
+      series: LSERIES.map((s) => ({ name: s.name, color: s.color, values: BANDS.map((b) => lt(s.model, b).recall * 100) })),
+      extra: (gi) => { const r = lt("gradient boosting", BANDS[gi]); return row(null, "Users in band", int(r.users)) + row(null, "Churn rate in band", pct(r.base_rate * 100)); },
+    });
+    $("month-note").textContent = MONTHS.find((m) => m.id === current).note || "";
+  }
+  segmented("month-seg", MONTHS, current, (v) => { current = v; renderMonth(); });
+  renderMonth();
+  redraws.push(() => recallDraw(), () => leadDraw());
+
+  // ---------- 3. Planner ----------
+  const P = { month: "2017-02", cap: 0.1 };
+  segmented("p-month", MONTHS.slice(0, 2), P.month, (v) => { P.month = v; plan(); });
+  segmented("p-cap", [0.05, 0.1, 0.2].map((c) => ({ id: String(c), label: c * 100 + "%" })), "0.1", (v) => { P.cap = +v; plan(); });
+  ["p-save", "p-cost", "p-value"].forEach((id) => $(id).addEventListener("input", plan));
+  function plan() {
+    const save = +$("p-save").value / 100, cost = Math.max(0, +$("p-cost").value || 0), value = Math.max(1, +$("p-value").value || 1);
+    $("o-save").textContent = pct(save * 100);
+    const users = mon(P.month).users, contacts = Math.round(users * P.cap);
+    const cols = [
+      { name: "Risk score", color: "--series-1", r: rec(P.month, "gradient boosting", P.cap) },
+      { name: "Rule: auto-renew off", color: "--series-2", r: rec(P.month, "rule: no auto-renew", P.cap) },
+      { name: "Random", color: "--reference", r: { precision: rec(P.month, "gradient boosting", P.cap).base_rate, recall: P.cap } },
+    ].map((c) => {
+      const onList = contacts * c.r.precision, saved = onList * save, spend = contacts * cost;
+      return { ...c, onList, recall: c.r.recall, saved, spend, revenue: saved * value, net: saved * value - spend, breakeven: cost / (value * c.r.precision) };
+    });
+    const best = (k, hi = true) => { const v = cols.map((c) => c[k]); return hi ? Math.max(...v) : Math.min(...v); };
+    const line = (label, k, fmt, hi, em) => `<tr class="${em ? "em" : ""}"><td>${label}</td>${cols.map((c) => `<td class="${hi != null && c[k] === best(k, hi) ? "better" : ""}">${fmt(c[k])}</td>`).join("")}</tr>`;
+    const nt = (v) => (v < 0 ? "−" : "") + "NT$" + int(Math.abs(v));
+    $("p-table").innerHTML =
+      `<thead><tr><th>${int(contacts)} contacts in ${MONTHS.find((m) => m.id === P.month).label}</th>${cols.map((c) => `<th><span class="sw" style="background:${css(c.color)}"></span>${c.name}</th>`).join("")}</tr></thead><tbody>` +
+      `<tr class="grp"><td colspan="4">Measured on held-out data</td></tr>` +
+      line("Would-be churners on the list", "onList", int, true) +
+      line("Share of all churners reached", "recall", (v) => pct(v * 100), true) +
+      line("Break-even save rate", "breakeven", (v) => pct(v * 100), false) +
+      `<tr class="grp"><td colspan="4">Scenario (assumptions)</td></tr>` +
+      line("Contact cost", "spend", nt, null) +
+      line("Subscribers saved", "saved", int, true) +
+      line("Revenue kept (one month)", "revenue", nt, true) +
+      line("Net value (one month)", "net", nt, true, true) +
+      `</tbody>`;
+  }
+  plan();
+
+  // ---------- 4. Monitoring ----------
+  const stabMonths = [...new Set(D.stability.map((r) => r.month))];
+  const st = (model) => stabMonths.map((m) => D.stability.find((r) => r.month === m && r.model === model));
+  const sg = st("gradient boosting"), sr = st("rule: no auto-renew");
+  legend("l-stab", [{ name: "Risk score (gradient boosting)", color: "--series-1", line: 1 }, { name: "Rule: auto-renew off", color: "--series-2", line: 1 }]);
+  redraws.push(lineChart("c-stab", {
+    label: "Share of churners reached by a 10 percent list, by month", height: 230, max: 100, markers: true, everyLabel: true,
+    x: stabMonths, shadeFrom: stabMonths.indexOf("2017-01"),
+    series: [
+      { name: "Risk score", color: "--series-1", values: sg.map((r) => r.recall * 100) },
+      { name: "Rule: auto-renew off", color: "--series-2", values: sr.map((r) => r.recall * 100) },
+    ],
+    extra: (i) => row(null, "Score AUC", sg[i].auc.toFixed(3)) + row(null, "Role", sg[i].split === "test" ? "Final test" : "Validation"),
+  }));
+  const gap = sg.map((r, i) => (r.recall - sr[i].recall) * 100);
+  const worst = sg.reduce((a, r) => (r.recall < a.recall ? r : a));
+  $("t-stab").innerHTML = `The score beat the rule in <b>every month</b>, by <b>${Math.min(...gap).toFixed(0)}–${Math.max(...gap).toFixed(0)} points</b>. Its weakest month was <b>${worst.month}</b> (${pct(worst.recall * 100)}). AUC falls from 0.885 in January to 0.810 on the March 2017 official file, so the score should be retrained on the latest months before use.`;
+
+  // ---------- 5. Drivers ----------
+  const GROUPS = [["stopped (0 days in the last 30)", "Stopped", "Stopped listening (0 days in the last 30)"], ["declined (more than 25%)", "Down", "Listening down more than 25%"], ["stable (within 25%)", "Stable", "Listening stable (within 25%)"], ["increased (more than 25%)", "Up", "Listening up more than 25%"]];
+  [["auto-renew on", "c-dec-auto", "--series-1"], ["manual (auto-renew off)", "c-dec-manual", "--series-2"]].forEach(([mode, id, color]) => {
+    const rows = GROUPS.map(([g]) => D.decline_by_mode.find((r) => r.renewal_mode === mode && r.group === g));
+    redraws.push(barChart(id, {
+      label: `Churn rate by listening change, ${mode}`, height: 200, left: 34, labelSeries: 0,
+      groups: GROUPS.map((g) => g[1]), tipTitle: (gi) => GROUPS[gi][2],
+      series: [{ name: "Churn rate", color, values: rows.map((r) => r.churn_rate) }],
+      valFmt: (v, d) => pct(v, d === 0 ? (v < 10 ? 1 : 0) : 1),
+      extra: (gi) => row(null, "Users", int(rows[gi].users)),
+    }));
+  });
+  const FEATURES = {
+    last_payment_method: ["Payment method (last transaction)", "sub"],
+    days_since_last_transaction: ["Days since last transaction", "sub"],
+    n_transactions: ["Number of transactions to date", "sub"],
+    last_auto_renew: ["Auto-renew on (last transaction)", "sub"],
+    last_is_cancel: ["Last transaction was a cancellation", "sub"],
+    n_transactions_90: ["Transactions in the last 90 days", "sub"],
+    trend_days_30_vs_prior_30: ["Listening trend, last 30 vs prior 30 days", "listen"],
+    days_to_expiration: ["Days until expiration", "sub"],
+    days_since_last_log: ["Days since last listening", "listen"],
+    active_days_60: ["Listening days in the last 60", "listen"],
+  };
+  const FG = { sub: { name: "Subscription record", color: "--series-1" }, listen: { name: "Listening behavior", color: "--series-3" } };
+  legend("l-imp", [FG.sub, FG.listen]);
+  redraws.push(hbar("c-imp", {
+    label: "Top 10 inputs by permutation importance",
+    items: D.importance.map((r) => {
+      const [label, g] = FEATURES[r.feature] || [r.feature, "sub"];
+      return { label, code: r.feature, value: r.auc_drop, color: FG[g].color, group: FG[g].name };
+    }),
+    fmt: (v) => v.toFixed(3),
+  }));
+
+  // ---------- 6. Actions ----------
+  const decFeb = D.decline_by_month.find((r) => r.target_month === "2017-02");
+  const medRR = (() => { const v = D.decline_by_month.map((r) => r.risk_ratio).sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; })();
+  const g10f = rec("2017-02", "gradient boosting", 0.1), r10f = rec("2017-02", "rule: no auto-renew", 0.1);
+  const ACTIONS = [
+    { rank: "Priority 1", pill: ["hyp", "To test"], title: "Renewal reminder before expiry",
+      big: pct(g10f.recall * 100), bigNote: `of February churners are on the 10% list (rule: ${pct(r10f.recall * 100)})`,
+      who: `Top 10% by risk score, ≈ ${int(feb.users * 0.1)} users a month`, when: "Start of the expiry month", test: "Reminder vs no contact, by risk band" },
+    { rank: "Priority 2", pill: ["hyp", "To test"], title: "Prompt to turn on auto-renew",
+      big: pct(feb.churn_rate_manual), bigNote: `churn among manual renewers vs ${pct(feb.churn_rate_auto)} with auto-renew (Feb 2017)`,
+      who: `Manual renewers, ≈ ${int(feb.users * feb.manual_share_of_users / 100)} users a month`, when: "With the reminder", test: "Reminder + prompt vs reminder alone" },
+    { rank: "Priority 3", pill: ["plan", "Lower priority"], title: "Outreach after a listening drop",
+      big: medRR.toFixed(2) + "×", bigNote: "churn of users who cut back or stopped, vs stable users (median month)",
+      who: `Listening down >25% or stopped, ≈ ${int(decFeb.comparable_users * (decFeb.share_stopped + decFeb.share_declined) / 100)} users a month`, when: "When the drop is detected", test: "Only after actions 1 and 2 are read" },
+  ];
+  $("action-cards").innerHTML = ACTIONS.map((a) => `
+    <div class="card action">
+      <div class="rank">${a.rank}<span class="pill ${a.pill[0]}">${a.pill[1]}</span></div>
+      <h3>${a.title}</h3>
+      <div class="big">${a.big}<span>${a.bigNote}</span></div>
+      <dl><dt>Who</dt><dd>${a.who}</dd><dt>When</dt><dd>${a.when}</dd><dt>Test</dt><dd>${a.test}</dd></dl>
+    </div>`).join("");
+
+  // ---------- Nav highlight ----------
+  const links = [...document.querySelectorAll("nav.top a")];
+  const io = new IntersectionObserver((es) => es.forEach((e) => {
+    if (e.isIntersecting) links.forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id));
+  }), { rootMargin: "-40% 0px -55% 0px" });
+  links.forEach((a) => { const s = document.querySelector(a.getAttribute("href")); if (s) io.observe(s); });
+
+  // Redraw on resize and theme change so text stays at its real size.
+  let t;
+  new ResizeObserver(() => { clearTimeout(t); t = setTimeout(() => { redraws.forEach((f) => f()); plan(); }, 80); }).observe(document.querySelector(".wrap"));
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { redraws.forEach((f) => f()); plan(); });
+})();
+</script>
+</body>
+</html>
