@@ -135,7 +135,6 @@ cd dbt && dbt run --profiles-dir . && dbt test --profiles-dir .   # marts and da
 | `tests/` | 74 unit tests: audit checks, label rebuild, features, leakage checks, evaluation, models |
 | `reports/` | Audit report, the data-quality issue register, SQL analysis, model results (`model_results.md` and saved tables), and the figures used above |
 | `docs/` | Data model (PostgreSQL schemas and key links), data dictionary, churn definition, prediction setup (cutoffs, feature windows, splits), feature dictionary, model card, recommendations and experiment design, notes on the official dataset description |
-| `KKBOX_MASTER_PLAN.md` | Scope, roadmap, decisions, and a dated log of every milestone |
 
 ## Churn definition
 

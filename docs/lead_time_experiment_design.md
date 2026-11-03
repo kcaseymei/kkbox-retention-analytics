@@ -1,6 +1,6 @@
 # Lead-time experiment: how early does churn become predictable?
 
-Status: **draft, not implemented, not approved.** Nothing below is a result. Items marked *hypothesis* are unverified. Builds on `docs/prediction_design.md` (cutoffs, purge rule, splits) and stage E (`reports/model_results.md`).
+Status: **draft design (optional extension), not implemented.** Nothing below is a result. Items marked *hypothesis* are unverified. Builds on `docs/prediction_design.md` (cutoffs, purge rule, splits) and stage E (`reports/model_results.md`).
 
 ## 1. Question
 

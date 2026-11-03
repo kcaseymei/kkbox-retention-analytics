@@ -224,10 +224,6 @@ data/processed/*
 # macOS
 .DS_Store
 
-# Local AI-assistant instruction files (never committed or pushed)
-CLAUDE.md
-AGENTS.md
-
 # dbt build artifacts
 dbt/target/
 dbt/logs/
